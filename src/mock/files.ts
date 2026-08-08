@@ -222,10 +222,15 @@ export function buildFileTree(paths: string[]): FileNode[] {
       const currentPath = parts.slice(0, i + 1).join("/");
       let node = level.find((n) => n.name === part);
       if (!node) {
-        node = { name: part, path: currentPath, type: isFile ? "file" : "folder", children: isFile ? undefined : [] };
+        node = isFile
+          ? { name: part, path: currentPath, type: "file" }
+          : { name: part, path: currentPath, type: "folder", children: [] };
         level.push(node);
       }
-      if (!isFile) level = node.children!;
+      if (!isFile) {
+        node.children ??= [];
+        level = node.children;
+      }
     });
   }
   return root;
