@@ -1,4 +1,3 @@
-<<<<<<< keep
 import { Outlet, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -50,5 +49,3 @@ function AppLayout() {
     </div>
   );
 }
-=======
->>>>>>> replace
