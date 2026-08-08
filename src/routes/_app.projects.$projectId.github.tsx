@@ -19,10 +19,10 @@ export default function GithubPage() {
               <h2 className="text-sm font-semibold">{r.name}</h2>
               <p className="mt-1 text-sm text-muted-foreground">{r.description}</p>
               <dl className="mt-4 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                <div><dt className="uppercase">Language</dt><dd className="text-foreground">{r.language}</dd></div>
-                <div><dt className="uppercase">Default branch</dt><dd className="font-mono text-foreground">{r.defaultBranch}</dd></div>
+                <div><dt className="uppercase">Language</dt><dd className="text-foreground">{r.languages.join(", ")}</dd></div>
+                <div><dt className="uppercase">Default branch</dt><dd className="font-mono text-foreground">{r.branches[0] ?? "—"}</dd></div>
                 <div><dt className="uppercase">Branches</dt><dd className="text-foreground">{r.branches.length}</dd></div>
-                <div><dt className="uppercase">Last commit</dt><dd className="text-foreground">{r.lastCommit}</dd></div>
+                <div><dt className="uppercase">Last update</dt><dd className="text-foreground">{r.updatedAt}</dd></div>
               </dl>
             </article>
           ))}

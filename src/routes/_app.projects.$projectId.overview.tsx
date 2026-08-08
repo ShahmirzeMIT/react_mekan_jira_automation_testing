@@ -25,7 +25,7 @@ export default function OverviewPage() {
     <div className="mx-auto max-w-7xl">
       <PageHeader
         title={project?.name ?? "Project"}
-        description={project?.description}
+        description={project?.description ?? ""}
         badge={<ConnectionBadge label={project?.status ?? "Active"} connected />}
         actions={<>
           <Button size="sm" asChild><Link to={`/projects/${projectId}/tasks`}>+ New Task</Link></Button>

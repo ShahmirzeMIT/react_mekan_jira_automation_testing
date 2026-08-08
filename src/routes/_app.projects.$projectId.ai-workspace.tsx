@@ -18,34 +18,34 @@ export default function AIWorkspacePage() {
 
   async function analyze() {
     setAIStatus("analyzing");
-    const res = await aiService.analyzeTask(taskKey, ai.selectedFiles);
-    setAnalysis(res.steps);
-    setAIStatus("idle");
+    const res = await aiService.analyzeTask(taskKey);
+    setAnalysis(res.plan);
+    setAIStatus("ready");
     logActivity("ai", `AI analyzed ${taskKey}`, { taskKey });
     toast.success("AI analysis complete.");
   }
 
   async function generate() {
     setAIStatus("generating");
-    const res = await aiService.generateCode(taskKey, prompt);
-    setCode(res.code);
-    setAIStatus("idle");
+    const res = await aiService.generateCode();
+    setCode(res.map((diff) => diff.newContent).join("\n\n"));
+    setAIStatus("ready");
     logActivity("ai", `AI generated code for ${taskKey}`, { taskKey });
     toast.success("Code generated.");
   }
 
   async function runTests() {
-    setAIStatus("testing");
-    const res = await aiService.runTests(taskKey);
-    setTests(res.output);
-    setAIStatus("idle");
+    setAIStatus("analyzing");
+    const res = await aiService.runTests();
+    setTests(res.map((test) => `${test.passed ? "✓" : "✗"} ${test.name}${test.detail ? ` — ${test.detail}` : ""}`).join("\n"));
+    setAIStatus("ready");
     toast.success("All tests passed.");
   }
 
   return (
     <div className="mx-auto max-w-7xl">
       <PageHeader title="AI Workspace" description={`Task ${taskKey} · ${ai.selectedFiles.length} files in context`}
-        badge={<AIStatusBadge status={ai.status} />}
+        badge={<AIStatusBadge status={ai.aiStatus} />}
         actions={<>
           <Button size="sm" variant="secondary" onClick={analyze}>Analyze</Button>
           <Button size="sm" onClick={generate}>Generate Code</Button>

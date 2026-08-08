@@ -45,6 +45,7 @@ export interface Task {
   aiState?: "none" | "assisted" | "generated" | "reviewed";
   jiraSynced: boolean;
   githubConnected: boolean;
+  active?: boolean;
   comments: TaskComment[];
   createdAt: string;
   updatedAt: string;
