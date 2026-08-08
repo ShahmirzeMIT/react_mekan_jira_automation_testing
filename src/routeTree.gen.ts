@@ -14,6 +14,8 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppProfileRouteImport } from './routes/_app.profile'
 import { Route as AppProjectsIndexRouteImport } from './routes/_app.projects.index'
+import { Route as AppProjectsProjectIdActivityRouteImport } from './routes/_app.projects.$projectId.activity'
+import { Route as AppProjectsProjectIdOverviewRouteImport } from './routes/_app.projects.$projectId.overview'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -39,18 +41,34 @@ const AppProjectsIndexRoute = AppProjectsIndexRouteImport.update({
   path: '/projects/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppProjectsProjectIdActivityRoute =
+  AppProjectsProjectIdActivityRouteImport.update({
+    id: '/projects/$projectId/activity',
+    path: '/projects/$projectId/activity',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppProjectsProjectIdOverviewRoute =
+  AppProjectsProjectIdOverviewRouteImport.update({
+    id: '/projects/$projectId/overview',
+    path: '/projects/$projectId/overview',
+    getParentRoute: () => AppRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/profile': typeof AppProfileRoute
   '/projects/': typeof AppProjectsIndexRoute
+  '/projects/$projectId/activity': typeof AppProjectsProjectIdActivityRoute
+  '/projects/$projectId/overview': typeof AppProjectsProjectIdOverviewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/profile': typeof AppProfileRoute
   '/projects': typeof AppProjectsIndexRoute
+  '/projects/$projectId/activity': typeof AppProjectsProjectIdActivityRoute
+  '/projects/$projectId/overview': typeof AppProjectsProjectIdOverviewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -59,14 +77,35 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_app/profile': typeof AppProfileRoute
   '/_app/projects/': typeof AppProjectsIndexRoute
+  '/_app/projects/$projectId/activity': typeof AppProjectsProjectIdActivityRoute
+  '/_app/projects/$projectId/overview': typeof AppProjectsProjectIdOverviewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/profile' | '/projects/'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/profile'
+    | '/projects/'
+    | '/projects/$projectId/activity'
+    | '/projects/$projectId/overview'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/profile' | '/projects'
+  to:
+    | '/'
+    | '/login'
+    | '/profile'
+    | '/projects'
+    | '/projects/$projectId/activity'
+    | '/projects/$projectId/overview'
   id:
-    '__root__' | '/' | '/_app' | '/login' | '/_app/profile' | '/_app/projects/'
+    | '__root__'
+    | '/'
+    | '/_app'
+    | '/login'
+    | '/_app/profile'
+    | '/_app/projects/'
+    | '/_app/projects/$projectId/activity'
+    | '/_app/projects/$projectId/overview'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -112,17 +151,35 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProjectsIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/projects/$projectId/activity': {
+      id: '/_app/projects/$projectId/activity'
+      path: '/projects/$projectId/activity'
+      fullPath: '/projects/$projectId/activity'
+      preLoaderRoute: typeof AppProjectsProjectIdActivityRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/projects/$projectId/overview': {
+      id: '/_app/projects/$projectId/overview'
+      path: '/projects/$projectId/overview'
+      fullPath: '/projects/$projectId/overview'
+      preLoaderRoute: typeof AppProjectsProjectIdOverviewRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
   AppProfileRoute: typeof AppProfileRoute
   AppProjectsIndexRoute: typeof AppProjectsIndexRoute
+  AppProjectsProjectIdActivityRoute: typeof AppProjectsProjectIdActivityRoute
+  AppProjectsProjectIdOverviewRoute: typeof AppProjectsProjectIdOverviewRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppProfileRoute: AppProfileRoute,
   AppProjectsIndexRoute: AppProjectsIndexRoute,
+  AppProjectsProjectIdActivityRoute: AppProjectsProjectIdActivityRoute,
+  AppProjectsProjectIdOverviewRoute: AppProjectsProjectIdOverviewRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
