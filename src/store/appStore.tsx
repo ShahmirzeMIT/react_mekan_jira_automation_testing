@@ -41,6 +41,20 @@ interface AIWorkspaceState {
   previewOpen: boolean;
 }
 
+type Theme = "light" | "dark";
+const THEME_STORAGE_KEY = "devflow.theme";
+const SIDEBAR_STORAGE_KEY = "devflow.sidebar-collapsed";
+
+function getStoredTheme(): Theme {
+  if (typeof window === "undefined") return "dark";
+  return localStorage.getItem(THEME_STORAGE_KEY) === "light" ? "light" : "dark";
+}
+
+function getStoredSidebarState(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true";
+}
+
 interface AppStore {
   // auth
   user: AuthUser | null;
@@ -51,6 +65,8 @@ interface AppStore {
   // ui
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
+  theme: Theme;
+  toggleTheme: () => void;
   commandOpen: boolean;
   setCommandOpen: (open: boolean) => void;
   // integrations
@@ -61,7 +77,11 @@ interface AppStore {
   disconnectGithub: () => void;
   // activity
   activities: ActivityEvent[];
-  logActivity: (kind: ActivityKind, title: string, meta?: { taskKey?: string; repository?: string }) => void;
+  logActivity: (
+    kind: ActivityKind,
+    title: string,
+    meta?: { taskKey?: string; repository?: string },
+  ) => void;
   // ai workspace
   ai: AIWorkspaceState;
   setTask: (key: string | null) => void;
@@ -95,7 +115,8 @@ const initialAI: AIWorkspaceState = {
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setLoading] = useState(true);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(getStoredSidebarState);
+  const [theme, setTheme] = useState<Theme>(getStoredTheme);
   const [commandOpen, setCommandOpen] = useState(false);
   const [activities, setActivities] = useState<ActivityEvent[]>(mockActivities);
   const [integrations, setIntegrations] = useState<IntegrationState>({
@@ -116,12 +137,31 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []);
 
-  const logActivity = useCallback<AppStore["logActivity"]>((kind, title, meta) => {
-    setActivities((prev) => [
-      { id: `a-${Date.now()}`, kind, title, user: user?.name || "User", time: "Just now", ...meta },
-      ...prev,
-    ]);
-  }, [user]);
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
+
+  const logActivity = useCallback<AppStore["logActivity"]>(
+    (kind, title, meta) => {
+      setActivities((prev) => [
+        {
+          id: `a-${Date.now()}`,
+          kind,
+          title,
+          user: user?.name || "User",
+          time: "Just now",
+          ...meta,
+        },
+        ...prev,
+      ]);
+    },
+    [user],
+  );
 
   const value = useMemo<AppStore>(
     () => ({
@@ -161,24 +201,49 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       },
       sidebarCollapsed,
       toggleSidebar: () => setSidebarCollapsed((c) => !c),
+      theme,
+      toggleTheme: () => setTheme((current) => (current === "dark" ? "light" : "dark")),
       commandOpen,
       setCommandOpen,
       integrations,
       connectJira: (project) =>
-        setIntegrations((s) => ({ ...s, jiraConnected: true, jiraProject: project, jiraLastSync: "Just now" })),
+        setIntegrations((s) => ({
+          ...s,
+          jiraConnected: true,
+          jiraProject: project,
+          jiraLastSync: "Just now",
+        })),
       disconnectJira: () =>
-        setIntegrations((s) => ({ ...s, jiraConnected: false, jiraProject: null, jiraLastSync: null })),
+        setIntegrations((s) => ({
+          ...s,
+          jiraConnected: false,
+          jiraProject: null,
+          jiraLastSync: null,
+        })),
       connectGithub: (repository) =>
-        setIntegrations((s) => ({ ...s, githubConnected: true, githubRepository: repository, githubLastSync: "Just now" })),
+        setIntegrations((s) => ({
+          ...s,
+          githubConnected: true,
+          githubRepository: repository,
+          githubLastSync: "Just now",
+        })),
       disconnectGithub: () =>
-        setIntegrations((s) => ({ ...s, githubConnected: false, githubRepository: null, githubLastSync: null })),
+        setIntegrations((s) => ({
+          ...s,
+          githubConnected: false,
+          githubRepository: null,
+          githubLastSync: null,
+        })),
       activities,
       logActivity,
       ai,
       setTask: (key) => setAI((s) => ({ ...s, selectedTaskKey: key })),
       selectFile: (path) =>
-        setAI((s) => (s.selectedFiles.includes(path) ? s : { ...s, selectedFiles: [...s.selectedFiles, path] })),
-      removeFile: (path) => setAI((s) => ({ ...s, selectedFiles: s.selectedFiles.filter((p) => p !== path) })),
+        setAI((s) =>
+          s.selectedFiles.includes(path) ? s : { ...s, selectedFiles: [...s.selectedFiles, path] },
+        ),
+      removeFile: (path) =>
+        setAI((s) => ({ ...s, selectedFiles: s.selectedFiles.filter((p) => p !== path) })),
       setSelectedFiles: (paths) => setAI((s) => ({ ...s, selectedFiles: paths })),
       pushMessage: (message) => setAI((s) => ({ ...s, messages: [...s.messages, message] })),
       setMessages: (messages) => setAI((s) => ({ ...s, messages })),
@@ -197,7 +262,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setTestResults: (testResults) => setAI((s) => ({ ...s, testResults })),
       setPreviewOpen: (previewOpen) => setAI((s) => ({ ...s, previewOpen })),
     }),
-    [user, isLoading, sidebarCollapsed, commandOpen, integrations, activities, ai, logActivity],
+    [
+      user,
+      isLoading,
+      sidebarCollapsed,
+      theme,
+      commandOpen,
+      integrations,
+      activities,
+      ai,
+      logActivity,
+    ],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
