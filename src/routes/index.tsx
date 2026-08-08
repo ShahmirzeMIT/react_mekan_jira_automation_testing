@@ -1,24 +1,27 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { FullScreenLoader } from "@/components/common/States";
+import { useAppStore } from "@/store/appStore";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
+  ssr: false,
+  head: () => ({
+    meta: [
+      { title: "DevFlow AI — Jira tasks, GitHub code and AI in one workspace" },
+      { name: "description", content: "DevFlow AI connects Jira tasks to the code that needs to change and gives AI the exact context to implement, review and test the work." },
+      { property: "og:title", content: "DevFlow AI — developer workflow platform" },
+      { property: "og:description", content: "Turn development tasks into working code with Jira, GitHub and AI in one workspace." },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
 function Index() {
-  return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
-  );
+  const { isAuthenticated, isLoading } = useAppStore();
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (isLoading) return;
+    navigate({ to: isAuthenticated ? "/projects" : "/login", replace: true });
+  }, [isLoading, isAuthenticated, navigate]);
+  return <FullScreenLoader label="Starting DevFlow AI" />;
 }
