@@ -14,7 +14,7 @@ export function ProjectSelector({ projectId }: { projectId: string }) {
 
   return (
     <Select
-      value={projects.some((p) => p.id === projectId) ? projectId : undefined}
+      value={projects.some((p) => p.id === projectId) ? projectId : ""}
       onValueChange={(id) => navigate({ to: "/projects/$projectId/overview", params: { projectId: id } })}
     >
       <SelectTrigger className="h-9 w-full text-sm" aria-label="Select project">
