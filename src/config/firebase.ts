@@ -6,16 +6,17 @@ import {
   initializeAuth,
   type Auth,
 } from "firebase/auth";
+import { getFirestore, type Firestore } from "firebase/firestore";
 
 const firebaseConfig = {
   // `VITE_API_KEY` is kept as a legacy fallback for existing deployments.
   // New environments should use the explicit Firebase variable.
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || import.meta.env.VITE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: import.meta.env["VITE_FIREBASE_API_KEY"] || import.meta.env["VITE_API_KEY"],
+  authDomain: import.meta.env["VITE_FIREBASE_AUTH_DOMAIN"],
+  projectId: import.meta.env["VITE_FIREBASE_PROJECT_ID"],
+  storageBucket: import.meta.env["VITE_FIREBASE_STORAGE_BUCKET"],
+  messagingSenderId: import.meta.env["VITE_FIREBASE_MESSAGING_SENDER_ID"],
+  appId: import.meta.env["VITE_FIREBASE_APP_ID"],
 };
 
 export const firebaseEnabled = Boolean(
@@ -29,6 +30,7 @@ export const firebaseEnabled = Boolean(
 
 let authInstance: Auth | null = null;
 let appInstance: FirebaseApp | null = null;
+let firestoreInstance: Firestore | null = null;
 
 export function getFirebaseAuth(): Auth | null {
   if (!firebaseEnabled) {
@@ -63,5 +65,23 @@ export function getFirebaseAuth(): Auth | null {
       console.error("Firebase initialization error:", error);
       return null;
     }
+  }
+}
+
+export function getFirebaseFirestore(): Firestore | null {
+  if (!firebaseEnabled) {
+    console.warn("Firebase is not configured. Please check your environment variables.");
+    return null;
+  }
+
+  try {
+    if (firestoreInstance) return firestoreInstance;
+
+    const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+    firestoreInstance = getFirestore(app);
+    return firestoreInstance;
+  } catch (error) {
+    console.error("Firestore initialization error:", error);
+    return null;
   }
 }
