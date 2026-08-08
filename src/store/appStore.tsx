@@ -1,3 +1,4 @@
+// appStore.tsx
 import {
   createContext,
   useCallback,
@@ -117,10 +118,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const logActivity = useCallback<AppStore["logActivity"]>((kind, title, meta) => {
     setActivities((prev) => [
-      { id: `a-${Date.now()}`, kind, title, user: "You", time: "Just now", ...meta },
+      { id: `a-${Date.now()}`, kind, title, user: user?.name || "User", time: "Just now", ...meta },
       ...prev,
     ]);
-  }, []);
+  }, [user]);
 
   const value = useMemo<AppStore>(
     () => ({
@@ -128,22 +129,35 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       isAuthenticated: Boolean(user),
       isLoading,
       signIn: async () => {
-        const next = await authService.signInWithGoogle();
-        setUser(next);
-        setLoading(false);
+        try {
+          const next = await authService.signInWithGoogle();
+          setUser(next);
+        } catch (error) {
+          console.error("Sign in failed:", error);
+          throw error;
+        } finally {
+          setLoading(false);
+        }
       },
       signOut: async () => {
-        await authService.signOut();
-        setUser(null);
-        setIntegrations({
-          jiraConnected: false,
-          githubConnected: false,
-          jiraProject: null,
-          githubRepository: null,
-          jiraLastSync: null,
-          githubLastSync: null,
-        });
-        setAI(initialAI);
+        try {
+          await authService.signOut();
+          setUser(null);
+        } catch (error) {
+          console.error("Sign out failed:", error);
+          throw error;
+        } finally {
+          setIntegrations({
+            jiraConnected: false,
+            githubConnected: false,
+            jiraProject: null,
+            githubRepository: null,
+            jiraLastSync: null,
+            githubLastSync: null,
+          });
+          setAI(initialAI);
+          setLoading(false);
+        }
       },
       sidebarCollapsed,
       toggleSidebar: () => setSidebarCollapsed((c) => !c),
