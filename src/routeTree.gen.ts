@@ -16,6 +16,8 @@ import { Route as AppProfileRouteImport } from './routes/_app.profile'
 import { Route as AppSettingsRouteImport } from './routes/_app.settings'
 import { Route as AppProjectsIndexRouteImport } from './routes/_app.projects.index'
 import { Route as AppProjectsProjectIdActivityRouteImport } from './routes/_app.projects.$projectId.activity'
+import { Route as AppProjectsProjectIdAiWorkspaceRouteImport } from './routes/_app.projects.$projectId.ai-workspace'
+import { Route as AppProjectsProjectIdGithubRouteImport } from './routes/_app.projects.$projectId.github'
 import { Route as AppProjectsProjectIdOverviewRouteImport } from './routes/_app.projects.$projectId.overview'
 import { Route as AppProjectsProjectIdRelateTaskRouteImport } from './routes/_app.projects.$projectId.relate-task'
 import { Route as AppProjectsProjectIdTasksIndexRouteImport } from './routes/_app.projects.$projectId.tasks.index'
@@ -56,6 +58,18 @@ const AppProjectsProjectIdActivityRoute =
     path: '/projects/$projectId/activity',
     getParentRoute: () => AppRoute,
   } as any)
+const AppProjectsProjectIdAiWorkspaceRoute =
+  AppProjectsProjectIdAiWorkspaceRouteImport.update({
+    id: '/projects/$projectId/ai-workspace',
+    path: '/projects/$projectId/ai-workspace',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppProjectsProjectIdGithubRoute =
+  AppProjectsProjectIdGithubRouteImport.update({
+    id: '/projects/$projectId/github',
+    path: '/projects/$projectId/github',
+    getParentRoute: () => AppRoute,
+  } as any)
 const AppProjectsProjectIdOverviewRoute =
   AppProjectsProjectIdOverviewRouteImport.update({
     id: '/projects/$projectId/overview',
@@ -88,6 +102,8 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AppSettingsRoute
   '/projects/': typeof AppProjectsIndexRoute
   '/projects/$projectId/activity': typeof AppProjectsProjectIdActivityRoute
+  '/projects/$projectId/ai-workspace': typeof AppProjectsProjectIdAiWorkspaceRoute
+  '/projects/$projectId/github': typeof AppProjectsProjectIdGithubRoute
   '/projects/$projectId/overview': typeof AppProjectsProjectIdOverviewRoute
   '/projects/$projectId/relate-task': typeof AppProjectsProjectIdRelateTaskRoute
   '/projects/$projectId/tasks/$taskId': typeof AppProjectsProjectIdTasksTaskIdRoute
@@ -100,6 +116,8 @@ export interface FileRoutesByTo {
   '/settings': typeof AppSettingsRoute
   '/projects': typeof AppProjectsIndexRoute
   '/projects/$projectId/activity': typeof AppProjectsProjectIdActivityRoute
+  '/projects/$projectId/ai-workspace': typeof AppProjectsProjectIdAiWorkspaceRoute
+  '/projects/$projectId/github': typeof AppProjectsProjectIdGithubRoute
   '/projects/$projectId/overview': typeof AppProjectsProjectIdOverviewRoute
   '/projects/$projectId/relate-task': typeof AppProjectsProjectIdRelateTaskRoute
   '/projects/$projectId/tasks/$taskId': typeof AppProjectsProjectIdTasksTaskIdRoute
@@ -114,6 +132,8 @@ export interface FileRoutesById {
   '/_app/settings': typeof AppSettingsRoute
   '/_app/projects/': typeof AppProjectsIndexRoute
   '/_app/projects/$projectId/activity': typeof AppProjectsProjectIdActivityRoute
+  '/_app/projects/$projectId/ai-workspace': typeof AppProjectsProjectIdAiWorkspaceRoute
+  '/_app/projects/$projectId/github': typeof AppProjectsProjectIdGithubRoute
   '/_app/projects/$projectId/overview': typeof AppProjectsProjectIdOverviewRoute
   '/_app/projects/$projectId/relate-task': typeof AppProjectsProjectIdRelateTaskRoute
   '/_app/projects/$projectId/tasks/$taskId': typeof AppProjectsProjectIdTasksTaskIdRoute
@@ -128,6 +148,8 @@ export interface FileRouteTypes {
     | '/settings'
     | '/projects/'
     | '/projects/$projectId/activity'
+    | '/projects/$projectId/ai-workspace'
+    | '/projects/$projectId/github'
     | '/projects/$projectId/overview'
     | '/projects/$projectId/relate-task'
     | '/projects/$projectId/tasks/$taskId'
@@ -140,6 +162,8 @@ export interface FileRouteTypes {
     | '/settings'
     | '/projects'
     | '/projects/$projectId/activity'
+    | '/projects/$projectId/ai-workspace'
+    | '/projects/$projectId/github'
     | '/projects/$projectId/overview'
     | '/projects/$projectId/relate-task'
     | '/projects/$projectId/tasks/$taskId'
@@ -153,6 +177,8 @@ export interface FileRouteTypes {
     | '/_app/settings'
     | '/_app/projects/'
     | '/_app/projects/$projectId/activity'
+    | '/_app/projects/$projectId/ai-workspace'
+    | '/_app/projects/$projectId/github'
     | '/_app/projects/$projectId/overview'
     | '/_app/projects/$projectId/relate-task'
     | '/_app/projects/$projectId/tasks/$taskId'
@@ -216,6 +242,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProjectsProjectIdActivityRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/projects/$projectId/ai-workspace': {
+      id: '/_app/projects/$projectId/ai-workspace'
+      path: '/projects/$projectId/ai-workspace'
+      fullPath: '/projects/$projectId/ai-workspace'
+      preLoaderRoute: typeof AppProjectsProjectIdAiWorkspaceRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/projects/$projectId/github': {
+      id: '/_app/projects/$projectId/github'
+      path: '/projects/$projectId/github'
+      fullPath: '/projects/$projectId/github'
+      preLoaderRoute: typeof AppProjectsProjectIdGithubRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/projects/$projectId/overview': {
       id: '/_app/projects/$projectId/overview'
       path: '/projects/$projectId/overview'
@@ -252,6 +292,8 @@ interface AppRouteChildren {
   AppSettingsRoute: typeof AppSettingsRoute
   AppProjectsIndexRoute: typeof AppProjectsIndexRoute
   AppProjectsProjectIdActivityRoute: typeof AppProjectsProjectIdActivityRoute
+  AppProjectsProjectIdAiWorkspaceRoute: typeof AppProjectsProjectIdAiWorkspaceRoute
+  AppProjectsProjectIdGithubRoute: typeof AppProjectsProjectIdGithubRoute
   AppProjectsProjectIdOverviewRoute: typeof AppProjectsProjectIdOverviewRoute
   AppProjectsProjectIdRelateTaskRoute: typeof AppProjectsProjectIdRelateTaskRoute
   AppProjectsProjectIdTasksTaskIdRoute: typeof AppProjectsProjectIdTasksTaskIdRoute
@@ -263,6 +305,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppSettingsRoute: AppSettingsRoute,
   AppProjectsIndexRoute: AppProjectsIndexRoute,
   AppProjectsProjectIdActivityRoute: AppProjectsProjectIdActivityRoute,
+  AppProjectsProjectIdAiWorkspaceRoute: AppProjectsProjectIdAiWorkspaceRoute,
+  AppProjectsProjectIdGithubRoute: AppProjectsProjectIdGithubRoute,
   AppProjectsProjectIdOverviewRoute: AppProjectsProjectIdOverviewRoute,
   AppProjectsProjectIdRelateTaskRoute: AppProjectsProjectIdRelateTaskRoute,
   AppProjectsProjectIdTasksTaskIdRoute: AppProjectsProjectIdTasksTaskIdRoute,
