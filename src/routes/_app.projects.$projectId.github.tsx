@@ -1,23 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ConnectionBadge } from "@/components/common/Badges";
 import { ListSkeleton } from "@/components/common/States";
 import { useRepositories } from "@/hooks/useAppData";
 import { useAppStore } from "@/store/appStore";
 
-export const Route = createFileRoute("/_app/projects/$projectId/github")({
-  head: () => ({
-    meta: [
-      { title: "GitHub repositories — DevFlow AI" },
-      { name: "description", content: "Browse connected repositories, branches, languages and recent commits powering your AI development workflow." },
-      { property: "og:title", content: "GitHub repositories — DevFlow AI" },
-      { property: "og:description", content: "Connected repositories, branches and recent commits." },
-    ],
-  }),
-  component: GithubPage,
-});
-
-function GithubPage() {
+export default function GithubPage() {
   const { integrations } = useAppStore();
   const { data: repos = [], isLoading } = useRepositories();
 
@@ -32,10 +19,10 @@ function GithubPage() {
               <h2 className="text-sm font-semibold">{r.name}</h2>
               <p className="mt-1 text-sm text-muted-foreground">{r.description}</p>
               <dl className="mt-4 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                <div><dt className="uppercase">Language</dt><dd className="text-foreground">{r.language}</dd></div>
-                <div><dt className="uppercase">Default branch</dt><dd className="font-mono text-foreground">{r.defaultBranch}</dd></div>
+                <div><dt className="uppercase">Language</dt><dd className="text-foreground">{r.languages.join(", ")}</dd></div>
+                <div><dt className="uppercase">Default branch</dt><dd className="font-mono text-foreground">{r.branches[0] ?? "—"}</dd></div>
                 <div><dt className="uppercase">Branches</dt><dd className="text-foreground">{r.branches.length}</dd></div>
-                <div><dt className="uppercase">Last commit</dt><dd className="text-foreground">{r.lastCommit}</dd></div>
+                <div><dt className="uppercase">Last update</dt><dd className="text-foreground">{r.updatedAt}</dd></div>
               </dl>
             </article>
           ))}

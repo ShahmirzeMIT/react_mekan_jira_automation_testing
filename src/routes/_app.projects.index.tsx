@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link } from "react-router-dom";
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Pencil, Plus, Power } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -9,36 +9,52 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CardsSkeleton, EmptyState } from "@/components/common/States";
 import { useProjects } from "@/hooks/useAppData";
 import { projectService } from "@/services/projectService";
-import { useQueryClient } from "@tanstack/react-query";
+import type { Project } from "@/types";
 
-export const Route = createFileRoute("/_app/projects/")({
-  head: () => ({
-    meta: [
-      { title: "Projects — DevFlow AI" },
-      { name: "description", content: "All your DevFlow AI projects with Jira, GitHub and AI-assisted progress at a glance." },
-      { property: "og:title", content: "Projects — DevFlow AI" },
-      { property: "og:description", content: "All your DevFlow AI projects with Jira, GitHub and AI progress." },
-    ],
-  }),
-  component: ProjectsPage,
-});
-
-function ProjectsPage() {
-  const { data: projects, isLoading } = useProjects();
-  const qc = useQueryClient();
+export default function ProjectsPage() {
+  const { data: projects, isLoading, refetch } = useProjects();
   const [open, setOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | Project["status"]>("ALL");
   const [form, setForm] = useState({ name: "", description: "", githubRepository: "devflow-ai", jiraProject: "DEV", defaultBranch: "main", color: "#5B8DEF" });
 
   async function create() {
     if (!form.name.trim()) { toast.error("Project name is required."); return; }
     await projectService.createProject({ ...form, icon: "Rocket" });
-    await qc.invalidateQueries({ queryKey: ["projects"] });
+    await refetch();
     toast.success("Project created.");
     setOpen(false);
   }
+
+  async function saveProject() {
+    if (!editingProject || !form.name.trim()) { toast.error("Project name is required."); return; }
+    await projectService.updateProject(editingProject.id, { ...form });
+    await refetch();
+    toast.success("Project updated.");
+    setEditingProject(null);
+  }
+
+  async function toggleProjectStatus(project: Project) {
+    const status = project.status === "Active" ? "Paused" : "Active";
+    await projectService.updateProject(project.id, { status });
+    await refetch();
+    toast.success(`${project.name} ${status === "Active" ? "activated" : "deactivated"}.`);
+  }
+
+  function beginEdit(project: Project) {
+    setForm({ name: project.name, description: project.description, githubRepository: project.githubRepository, jiraProject: project.jiraProject, defaultBranch: project.defaultBranch, color: project.color });
+    setEditingProject(project);
+  }
+
+  const visibleProjects = projects?.filter((project) => {
+    const matchesQuery = `${project.name} ${project.description} ${project.jiraProject} ${project.githubRepository}`.toLowerCase().includes(query.toLowerCase());
+    return matchesQuery && (statusFilter === "ALL" || project.status === statusFilter);
+  });
 
   const dialog = (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -63,17 +79,33 @@ function ProjectsPage() {
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader title="Projects" description="Every workspace connecting Jira, GitHub and AI." actions={dialog} />
+      <div className="surface mb-3 flex flex-wrap items-center gap-2 p-3">
+        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search projects…" className="h-9 max-w-xs" />
+        <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as "ALL" | Project["status"])}>
+          <SelectTrigger className="h-9 w-40"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All statuses</SelectItem>
+            <SelectItem value="Active">Active</SelectItem>
+            <SelectItem value="Paused">Inactive</SelectItem>
+            <SelectItem value="Archived">Archived</SelectItem>
+          </SelectContent>
+        </Select>
+        <span className="ml-auto font-mono text-[11px] text-muted-foreground">{visibleProjects?.length ?? 0} / {projects?.length ?? 0}</span>
+      </div>
       {isLoading ? <CardsSkeleton /> : !projects?.length ? (
         <EmptyState title="Create your first project" description="A project links a Jira board with a GitHub repository so AI can work with real context." action={dialog} />
+      ) : !visibleProjects?.length ? (
+        <EmptyState title="No projects match your filters" description="Adjust your search or status filter to see more projects." />
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {projects.map((p) => {
+          {visibleProjects.map((p) => {
             const progress = p.tasks ? Math.round((p.completed / p.tasks) * 100) : 0;
             return (
               <div key={p.id} className="surface flex flex-col p-5">
                 <div className="flex items-center gap-2">
                   <span className="size-2.5 rounded-full" style={{ backgroundColor: p.color }} />
                   <h2 className="truncate text-sm font-semibold">{p.name}</h2>
+                  <span className={p.status === "Active" ? "ml-auto rounded border border-success/30 px-1.5 py-0.5 text-[10px] text-success" : "ml-auto rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground"}>{p.status}</span>
                 </div>
                 <p className="mt-1.5 line-clamp-2 text-sm text-muted-foreground">{p.description}</p>
                 <div className="mt-4 flex flex-wrap gap-1.5 font-mono text-[11px] text-muted-foreground">
@@ -88,14 +120,34 @@ function ProjectsPage() {
                 </dl>
                 <Progress value={progress} className="mt-4 h-1.5" />
                 <p className="mt-1.5 text-xs text-muted-foreground">{progress}% progress</p>
-                <Button asChild size="sm" variant="secondary" className="mt-4">
-                  <Link to="/projects/$projectId/overview" params={{ projectId: p.id }}>Open Project</Link>
-                </Button>
+                <div className="mt-4 flex gap-2">
+                  <Button asChild size="sm" variant="secondary" className="flex-1"><Link to={`/projects/${p.id}/overview`}>Open Project</Link></Button>
+                  <Button size="sm" variant="outline" onClick={() => beginEdit(p)} aria-label={`Update ${p.name}`}><Pencil className="size-4" /></Button>
+                  <Button size="sm" variant="outline" onClick={() => toggleProjectStatus(p)} disabled={p.status === "Archived"} aria-label={p.status === "Active" ? `Deactivate ${p.name}` : `Activate ${p.name}`}>
+                    <Power className="size-4" /> {p.status === "Active" ? "Deactivate" : "Activate"}
+                  </Button>
+                </div>
               </div>
             );
           })}
         </div>
       )}
+      <Dialog open={Boolean(editingProject)} onOpenChange={(isOpen) => !isOpen && setEditingProject(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Update project</DialogTitle></DialogHeader>
+          <div className="grid gap-3">
+            <div className="grid gap-1.5"><Label>Project Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+            <div className="grid gap-1.5"><Label>Description</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5"><Label>GitHub Repository</Label><Input value={form.githubRepository} onChange={(e) => setForm({ ...form, githubRepository: e.target.value })} /></div>
+              <div className="grid gap-1.5"><Label>Jira Project</Label><Input value={form.jiraProject} onChange={(e) => setForm({ ...form, jiraProject: e.target.value })} /></div>
+              <div className="grid gap-1.5"><Label>Default Branch</Label><Input value={form.defaultBranch} onChange={(e) => setForm({ ...form, defaultBranch: e.target.value })} /></div>
+              <div className="grid gap-1.5"><Label>Project Color</Label><Input type="color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} /></div>
+            </div>
+          </div>
+          <DialogFooter><Button variant="ghost" onClick={() => setEditingProject(null)}>Cancel</Button><Button onClick={saveProject}>Save changes</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

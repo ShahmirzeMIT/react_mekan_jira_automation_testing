@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link, useParams } from "react-router-dom";
 import { useMemo, useState } from "react";
-import { ListChecks, Plus } from "lucide-react";
+import { ListChecks, Pencil, Play, Plus, Power, Square } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -17,31 +17,18 @@ import { taskService, type TaskFilters } from "@/services/taskService";
 import { jiraService } from "@/services/jiraService";
 import { relativeTime, statusLabel } from "@/utils";
 import type { TaskPriority, TaskStatus } from "@/types";
-import { useQueryClient } from "@tanstack/react-query";
-
-export const Route = createFileRoute("/_app/projects/$projectId/tasks/")({
-  head: () => ({
-    meta: [
-      { title: "Tasks — DevFlow AI" },
-      { name: "description", content: "Filter, search and manage Jira development tasks connected to your GitHub repositories and AI workspace." },
-      { property: "og:title", content: "Tasks — DevFlow AI" },
-      { property: "og:description", content: "Filter, search and manage Jira development tasks." },
-    ],
-  }),
-  component: TasksPage,
-});
-
-function TasksPage() {
-  const { projectId } = Route.useParams();
+export default function TasksPage() {
+  const { projectId = "p-1" } = useParams();
   const { integrations, connectJira, logActivity } = useAppStore();
-  const { data: tasks = [], isLoading } = useTasks(projectId, integrations.jiraConnected);
-  const qc = useQueryClient();
+  const { data: tasks = [], isLoading, refetch } = useTasks(projectId, integrations.jiraConnected);
   const [filters, setFilters] = useState<TaskFilters>({ search: "" });
   const [connectOpen, setConnectOpen] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [form, setForm] = useState({ url: "https://devflow.atlassian.net", workspace: "devflow", project: "DEV" });
   const [newTask, setNewTask] = useState({ title: "", description: "", priority: "MEDIUM" as TaskPriority });
   const [taskOpen, setTaskOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<(typeof tasks)[number] | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const visible = useMemo(() => taskService.filterTasks(tasks, filters), [tasks, filters]);
 
@@ -83,11 +70,38 @@ function TasksPage() {
   async function createTask() {
     if (!newTask.title.trim()) { toast.error("Title is required."); return; }
     await taskService.createTask({ ...newTask, assignee: "Shahmir", labels: [], projectId });
-    await qc.invalidateQueries({ queryKey: ["tasks", projectId] });
+    await refetch();
     logActivity("task", `Task created: ${newTask.title}`);
     toast.success("Task created.");
     setTaskOpen(false);
     setNewTask({ title: "", description: "", priority: "MEDIUM" });
+  }
+
+  async function updateTask() {
+    if (!editingTask || !editingTask.title.trim()) { toast.error("Task title is required."); return; }
+    setSaving(true);
+    try {
+      await taskService.updateTask(editingTask.key, {
+        title: editingTask.title,
+        description: editingTask.description,
+        priority: editingTask.priority,
+        status: editingTask.status,
+      });
+      await refetch();
+      logActivity("task", `Task updated: ${editingTask.title}`, { taskKey: editingTask.key });
+      toast.success("Task updated.");
+      setEditingTask(null);
+    } finally { setSaving(false); }
+  }
+
+  async function setTaskActive(task: (typeof tasks)[number], active: boolean) {
+    setSaving(true);
+    try {
+      await taskService.updateTask(task.key, { active });
+      await refetch();
+      logActivity("task", `Task ${active ? "activated" : "deactivated"}: ${task.title}`, { taskKey: task.key });
+      toast.success(`Task ${active ? "activated" : "deactivated"}.`);
+    } finally { setSaving(false); }
   }
 
   return (
@@ -144,26 +158,58 @@ function TasksPage() {
         <div className="surface overflow-x-auto">
           <table className="w-full min-w-[880px] text-sm">
             <thead className="text-[11px] tracking-wide text-muted-foreground uppercase">
-              <tr>{["Key","Title","Status","Priority","Assignee","GitHub","AI","Updated",""].map((h) => <th key={h} className="px-4 py-2.5 text-left font-medium">{h}</th>)}</tr>
+              <tr>{["Key","Title","Status","Priority","Assignee","GitHub","AI","Updated","Actions"].map((h) => <th key={h} className="px-4 py-2.5 text-left font-medium">{h}</th>)}</tr>
             </thead>
             <tbody>
               {visible.map((t) => (
                 <tr key={t.key} className="border-t border-border hover:bg-muted/40">
                   <td className="px-4 py-2.5 font-mono text-xs">{t.key}</td>
-                  <td className="px-4 py-2.5"><Link to="/projects/$projectId/tasks/$taskId" params={{ projectId, taskId: t.key }} className="hover:text-primary">{t.title}</Link></td>
+                  <td className="px-4 py-2.5"><Link to={`/projects/${projectId}/tasks/${t.key}`} className="hover:text-primary">{t.title}</Link></td>
                   <td className="px-4 py-2.5"><TaskStatusBadge status={t.status} /></td>
                   <td className="px-4 py-2.5"><TaskPriorityBadge priority={t.priority} /></td>
                   <td className="px-4 py-2.5 text-muted-foreground">{t.assignee.name}</td>
                   <td className="px-4 py-2.5 text-xs text-muted-foreground">{t.githubConnected ? "Connected" : "Not connected"}</td>
                   <td className="px-4 py-2.5 text-xs text-muted-foreground">{t.aiAssisted ? "Assisted" : "Not assisted"}</td>
                   <td className="px-4 py-2.5 font-mono text-[11px] text-muted-foreground">{relativeTime(t.updatedAt)}</td>
-                  <td className="px-4 py-2.5"><Button size="sm" variant="ghost" asChild><Link to="/projects/$projectId/tasks/$taskId" params={{ projectId, taskId: t.key }}>Open</Link></Button></td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-1">
+                      <Button size="icon" variant="ghost" onClick={() => setEditingTask({ ...t })} aria-label={`Update ${t.key}`} title="Update task"><Pencil className="size-4" /></Button>
+                      {t.active !== false ? (
+                        <Button size="icon" variant="ghost" onClick={() => void setTaskActive(t, false)} disabled={saving} aria-label={`Deactivate ${t.key}`} title="Deactivate task"><Square className="size-4" /></Button>
+                      ) : (
+                        <Button size="icon" variant="ghost" onClick={() => void setTaskActive(t, true)} disabled={saving} aria-label={`Activate ${t.key}`} title="Activate task"><Play className="size-4" /></Button>
+                      )}
+                      <Button size="sm" variant="ghost" asChild><Link to={`/projects/${projectId}/tasks/${t.key}`}>Open</Link></Button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+      <Dialog open={Boolean(editingTask)} onOpenChange={(open) => !open && setEditingTask(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Update task</DialogTitle></DialogHeader>
+          {editingTask && <div className="grid gap-3">
+            <div className="grid gap-1.5"><Label>Title</Label><Input value={editingTask.title} onChange={(e) => setEditingTask({ ...editingTask, title: e.target.value })} /></div>
+            <div className="grid gap-1.5"><Label>Description</Label><Textarea value={editingTask.description} onChange={(e) => setEditingTask({ ...editingTask, description: e.target.value })} /></div>
+            <div className="grid gap-1.5"><Label>Priority</Label>
+              <Select value={editingTask.priority} onValueChange={(priority) => setEditingTask({ ...editingTask, priority: priority as TaskPriority })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{["LOWEST", "LOW", "MEDIUM", "HIGH", "HIGHEST"].map((priority) => <SelectItem key={priority} value={priority}>{priority}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5"><Label>Status</Label>
+              <Select value={editingTask.status} onValueChange={(status) => setEditingTask({ ...editingTask, status: status as TaskStatus })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{(["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "BLOCKED"] as TaskStatus[]).map((status) => <SelectItem key={status} value={status}>{statusLabel[status]}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>}
+          <DialogFooter><Button variant="ghost" onClick={() => setEditingTask(null)}>Cancel</Button><Button onClick={() => void updateTask()} disabled={saving}><Power className="size-4" /> Save update</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

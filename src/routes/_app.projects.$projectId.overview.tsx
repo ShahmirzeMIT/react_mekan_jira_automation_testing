@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link, useParams } from "react-router-dom";
 import { Bot, CheckCircle2, CircleDot, ListChecks, OctagonAlert } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -10,20 +10,8 @@ import { useProject, useTasks } from "@/hooks/useAppData";
 import { useAppStore } from "@/store/appStore";
 import { relativeTime } from "@/utils";
 
-export const Route = createFileRoute("/_app/projects/$projectId/overview")({
-  head: () => ({
-    meta: [
-      { title: "Project overview — DevFlow AI" },
-      { name: "description", content: "Task progress, AI productivity and recent development activity for your DevFlow AI project." },
-      { property: "og:title", content: "Project overview — DevFlow AI" },
-      { property: "og:description", content: "Task progress, AI productivity and recent activity." },
-    ],
-  }),
-  component: OverviewPage,
-});
-
-function OverviewPage() {
-  const { projectId } = Route.useParams();
+export default function OverviewPage() {
+  const { projectId = "p-1" } = useParams();
   const { data: project } = useProject(projectId);
   const { data: tasks = [] } = useTasks(projectId);
   const { integrations, activities } = useAppStore();
@@ -37,12 +25,12 @@ function OverviewPage() {
     <div className="mx-auto max-w-7xl">
       <PageHeader
         title={project?.name ?? "Project"}
-        description={project?.description}
+        description={project?.description ?? ""}
         badge={<ConnectionBadge label={project?.status ?? "Active"} connected />}
         actions={<>
-          <Button size="sm" asChild><Link to="/projects/$projectId/tasks" params={{ projectId }}>+ New Task</Link></Button>
-          <Button size="sm" variant="secondary" asChild><Link to="/projects/$projectId/tasks" params={{ projectId }}>Connect Jira</Link></Button>
-          <Button size="sm" variant="secondary" asChild><Link to="/projects/$projectId/github" params={{ projectId }}>Connect GitHub</Link></Button>
+          <Button size="sm" asChild><Link to={`/projects/${projectId}/tasks`}>+ New Task</Link></Button>
+          <Button size="sm" variant="secondary" asChild><Link to={`/projects/${projectId}/tasks`}>Connect Jira</Link></Button>
+          <Button size="sm" variant="secondary" asChild><Link to={`/projects/${projectId}/github`}>Connect GitHub</Link></Button>
         </>}
       />
 
@@ -97,7 +85,7 @@ function OverviewPage() {
               {(integrations.jiraConnected ? tasks : tasks.slice(0, 5)).slice(0, 6).map((t) => (
                 <tr key={t.key} className="border-t border-border">
                   <td className="px-5 py-2.5 font-mono text-xs">
-                    <Link to="/projects/$projectId/tasks/$taskId" params={{ projectId, taskId: t.key }} className="hover:text-primary">{t.key}</Link>
+                    <Link to={`/projects/${projectId}/tasks/${t.key}`} className="hover:text-primary">{t.key}</Link>
                   </td>
                   <td className="py-2.5 pr-3"><span className="line-clamp-1">{t.title}</span></td>
                   <td className="py-2.5"><TaskStatusBadge status={t.status} /></td>

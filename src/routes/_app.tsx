@@ -1,4 +1,4 @@
-import { Outlet, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Navigate, Outlet, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
@@ -6,17 +6,12 @@ import { CommandPalette } from "@/components/layout/CommandPalette";
 import { FullScreenLoader } from "@/components/common/States";
 import { useAppStore } from "@/store/appStore";
 
-export const Route = createFileRoute("/_app")({
-  ssr: false,
-  component: AppLayout,
-});
-
-function AppLayout() {
+export default function AppLayout() {
   const { isAuthenticated, isLoading, setCommandOpen } = useAppStore();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) navigate({ to: "/login", replace: true });
+    if (!isLoading && !isAuthenticated) navigate("/login", { replace: true });
   }, [isLoading, isAuthenticated, navigate]);
 
   useEffect(() => {
@@ -34,7 +29,8 @@ function AppLayout() {
     return () => window.removeEventListener("keydown", onKey);
   }, [setCommandOpen]);
 
-  if (isLoading || !isAuthenticated) return <FullScreenLoader />;
+  if (isLoading) return <FullScreenLoader />;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
 
   return (
     <div className="flex min-h-screen bg-background">

@@ -1,4 +1,4 @@
-import { Link, useParams, useRouterState } from "@tanstack/react-router";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { Bell, Info, Search } from "lucide-react";
 import { useAppStore } from "@/store/appStore";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,8 @@ const titles: Record<string, string> = {
 
 export function Header() {
   const { integrations, setCommandOpen, ai, user } = useAppStore();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const params = useParams({ strict: false }) as { projectId?: string; taskId?: string };
+  const { pathname } = useLocation();
+  const params = useParams<{ projectId?: string; taskId?: string }>();
   const segments = pathname.split("/").filter(Boolean);
   const last = segments[segments.length - 1] ?? "projects";
   const title = params.taskId ? params.taskId : (titles[last] ?? "Workspace");

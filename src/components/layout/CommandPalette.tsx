@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from "@tanstack/react-router";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
 } from "@/components/ui/command";
@@ -6,13 +6,13 @@ import { useAppStore } from "@/store/appStore";
 
 export function CommandPalette() {
   const { commandOpen, setCommandOpen, signOut, connectJira, connectGithub } = useAppStore();
-  const params = useParams({ strict: false }) as { projectId?: string };
+  const params = useParams<{ projectId?: string }>();
   const projectId = params.projectId ?? "p-1";
   const navigate = useNavigate();
 
   const go = (to: string, withParams = true) => () => {
     setCommandOpen(false);
-    navigate(withParams ? ({ to, params: { projectId } } as never) : ({ to } as never));
+    navigate(withParams ? to.replace("$projectId", projectId) : to);
   };
 
   return (

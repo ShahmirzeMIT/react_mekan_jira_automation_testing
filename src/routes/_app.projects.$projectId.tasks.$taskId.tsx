@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link, useParams } from "react-router-dom";
 import { useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -10,27 +10,12 @@ import { EmptyState, ListSkeleton } from "@/components/common/States";
 import { useTask } from "@/hooks/useAppData";
 import { taskService } from "@/services/taskService";
 import { useAppStore } from "@/store/appStore";
-import { useQueryClient } from "@tanstack/react-query";
-
-export const Route = createFileRoute("/_app/projects/$projectId/tasks/$taskId")({
-  head: () => ({
-    meta: [
-      { title: "Task details — DevFlow AI" },
-      { name: "description", content: "Task description, acceptance criteria, related repository files, AI assistance and Jira synchronization state." },
-      { property: "og:title", content: "Task details — DevFlow AI" },
-      { property: "og:description", content: "Description, acceptance criteria, related files and AI assistance." },
-    ],
-  }),
-  component: TaskDetailsPage,
-});
-
 const workflow = ["Task Selected","Files Related","AI Analysis","Code Generated","Changes Applied","Tests Passed","Preview","Ready for Review","Completed"];
 
-function TaskDetailsPage() {
-  const { projectId, taskId } = Route.useParams();
-  const { data: task, isLoading } = useTask(projectId, taskId);
+export default function TaskDetailsPage() {
+  const { projectId = "p-1", taskId = "" } = useParams();
+  const { data: task, isLoading, refetch } = useTask(projectId, taskId);
   const { logActivity, setTask } = useAppStore();
-  const qc = useQueryClient();
   const [comment, setComment] = useState("");
 
   if (isLoading) return <ListSkeleton rows={6} />;
@@ -38,8 +23,7 @@ function TaskDetailsPage() {
 
   async function complete() {
     await taskService.completeTask(taskId);
-    await qc.invalidateQueries({ queryKey: ["task", projectId, taskId] });
-    await qc.invalidateQueries({ queryKey: ["tasks", projectId] });
+    await refetch();
     logActivity("task", `Task ${taskId} completed`, { taskKey: taskId });
     toast.success("Task completed successfully.");
     setTimeout(() => toast.success("Jira synchronized"), 700);
@@ -52,9 +36,9 @@ function TaskDetailsPage() {
       <PageHeader title={`${task.key} · ${task.title}`} badge={<TaskStatusBadge status={task.status} />}
         description={`${task.issueType} · ${task.jiraProject} · updated ${task.updatedAt.slice(0, 10)}`}
         actions={<>
-          <Button size="sm" variant="secondary" asChild><Link to="/projects/$projectId/relate-task" params={{ projectId }}>Relate Files</Link></Button>
+          <Button size="sm" variant="secondary" asChild><Link to={`/projects/${projectId}/relate-task`}>Relate Files</Link></Button>
           <Button size="sm" variant="secondary" onClick={() => setTask(task.key)} asChild>
-            <Link to="/projects/$projectId/ai-workspace" params={{ projectId }}>Ask AI</Link>
+            <Link to={`/projects/${projectId}/ai-workspace`}>Ask AI</Link>
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild><Button size="sm" disabled={task.status === "DONE"}>Complete Task</Button></AlertDialogTrigger>

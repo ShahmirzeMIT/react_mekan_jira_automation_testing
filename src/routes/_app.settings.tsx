@@ -1,21 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { ConnectionBadge } from "@/components/common/Badges";
 import { useAppStore } from "@/store/appStore";
 
-export const Route = createFileRoute("/_app/settings")({
-  head: () => ({
-    meta: [
-      { title: "Settings — DevFlow AI" },
-      { name: "description", content: "Manage Jira and GitHub integrations, AI settings, notifications and security for your DevFlow AI workspace." },
-      { property: "og:title", content: "Settings — DevFlow AI" },
-      { property: "og:description", content: "Integrations, AI settings, notifications and security." },
-    ],
-  }),
-  component: SettingsPage,
-});
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -26,7 +14,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function SettingsPage() {
+export default function SettingsPage() {
   const { integrations, connectJira, connectGithub, disconnectJira, disconnectGithub, signOut } = useAppStore();
   return (
     <div className="mx-auto max-w-3xl space-y-4">
