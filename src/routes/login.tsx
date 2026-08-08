@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { ArrowRight, Bot, CheckCircle2, Code2, GitBranch, ListChecks, TestTube2 } from "lucide-react";
 import { toast } from "sonner";
@@ -7,18 +7,6 @@ import { FullScreenLoader } from "@/components/common/States";
 import { useAppStore } from "@/store/appStore";
 import { authService } from "@/services/authService";
 
-export const Route = createFileRoute("/login")({
-  ssr: false,
-  head: () => ({
-    meta: [
-      { title: "Sign in — DevFlow AI" },
-      { name: "description", content: "Sign in with Google to open your DevFlow AI workspace and connect Jira, GitHub and AI-assisted development." },
-      { property: "og:title", content: "Sign in — DevFlow AI" },
-      { property: "og:description", content: "Sign in with Google to open your DevFlow AI workspace." },
-    ],
-  }),
-  component: LoginPage,
-});
 
 const steps = [
   { label: "Jira Task", icon: ListChecks },
@@ -29,13 +17,13 @@ const steps = [
   { label: "Completed Task", icon: CheckCircle2 },
 ];
 
-function LoginPage() {
+export default function LoginPage() {
   const { signIn, isAuthenticated, isLoading } = useAppStore();
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) navigate({ to: "/projects", replace: true });
+    if (!isLoading && isAuthenticated) navigate("/projects", { replace: true });
   }, [isLoading, isAuthenticated, navigate]);
 
   if (isLoading) return <FullScreenLoader label="Checking your session" />;
@@ -45,7 +33,7 @@ function LoginPage() {
     try {
       await signIn();
       toast.success("Signed in successfully.");
-      navigate({ to: "/projects", replace: true });
+      navigate("/projects", { replace: true });
     } catch {
       toast.error("Google sign-in failed. Please try again.");
     } finally {

@@ -1,4 +1,3 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import Editor from "@monaco-editor/react";
 import { toast } from "sonner";
@@ -9,19 +8,7 @@ import { AIStatusBadge } from "@/components/common/Badges";
 import { useAppStore } from "@/store/appStore";
 import { aiService } from "@/services/aiService";
 
-export const Route = createFileRoute("/_app/projects/$projectId/ai-workspace")({
-  head: () => ({
-    meta: [
-      { title: "AI workspace — DevFlow AI" },
-      { name: "description", content: "Analyze tasks, generate code, review diffs and run simulated tests in the DevFlow AI development workspace." },
-      { property: "og:title", content: "AI workspace — DevFlow AI" },
-      { property: "og:description", content: "Analyze, generate, review and test code with AI." },
-    ],
-  }),
-  component: AIWorkspacePage,
-});
-
-function AIWorkspacePage() {
+export default function AIWorkspacePage() {
   const { ai, setAIStatus, logActivity } = useAppStore();
   const [prompt, setPrompt] = useState("Implement the acceptance criteria for the selected task.");
   const [analysis, setAnalysis] = useState<string[]>([]);

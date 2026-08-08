@@ -1,23 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ConnectionBadge } from "@/components/common/Badges";
 import { ListSkeleton } from "@/components/common/States";
 import { useRepositories } from "@/hooks/useAppData";
 import { useAppStore } from "@/store/appStore";
 
-export const Route = createFileRoute("/_app/projects/$projectId/github")({
-  head: () => ({
-    meta: [
-      { title: "GitHub repositories — DevFlow AI" },
-      { name: "description", content: "Browse connected repositories, branches, languages and recent commits powering your AI development workflow." },
-      { property: "og:title", content: "GitHub repositories — DevFlow AI" },
-      { property: "og:description", content: "Connected repositories, branches and recent commits." },
-    ],
-  }),
-  component: GithubPage,
-});
-
-function GithubPage() {
+export default function GithubPage() {
   const { integrations } = useAppStore();
   const { data: repos = [], isLoading } = useRepositories();
 

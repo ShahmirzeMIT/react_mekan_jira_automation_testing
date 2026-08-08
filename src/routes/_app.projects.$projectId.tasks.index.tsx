@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link, useParams } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { ListChecks, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -17,25 +17,10 @@ import { taskService, type TaskFilters } from "@/services/taskService";
 import { jiraService } from "@/services/jiraService";
 import { relativeTime, statusLabel } from "@/utils";
 import type { TaskPriority, TaskStatus } from "@/types";
-import { useQueryClient } from "@tanstack/react-query";
-
-export const Route = createFileRoute("/_app/projects/$projectId/tasks/")({
-  head: () => ({
-    meta: [
-      { title: "Tasks — DevFlow AI" },
-      { name: "description", content: "Filter, search and manage Jira development tasks connected to your GitHub repositories and AI workspace." },
-      { property: "og:title", content: "Tasks — DevFlow AI" },
-      { property: "og:description", content: "Filter, search and manage Jira development tasks." },
-    ],
-  }),
-  component: TasksPage,
-});
-
-function TasksPage() {
-  const { projectId } = Route.useParams();
+export default function TasksPage() {
+  const { projectId = "p-1" } = useParams();
   const { integrations, connectJira, logActivity } = useAppStore();
-  const { data: tasks = [], isLoading } = useTasks(projectId, integrations.jiraConnected);
-  const qc = useQueryClient();
+  const { data: tasks = [], isLoading, refetch } = useTasks(projectId, integrations.jiraConnected);
   const [filters, setFilters] = useState<TaskFilters>({ search: "" });
   const [connectOpen, setConnectOpen] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -83,7 +68,7 @@ function TasksPage() {
   async function createTask() {
     if (!newTask.title.trim()) { toast.error("Title is required."); return; }
     await taskService.createTask({ ...newTask, assignee: "Shahmir", labels: [], projectId });
-    await qc.invalidateQueries({ queryKey: ["tasks", projectId] });
+    await refetch();
     logActivity("task", `Task created: ${newTask.title}`);
     toast.success("Task created.");
     setTaskOpen(false);
@@ -150,14 +135,14 @@ function TasksPage() {
               {visible.map((t) => (
                 <tr key={t.key} className="border-t border-border hover:bg-muted/40">
                   <td className="px-4 py-2.5 font-mono text-xs">{t.key}</td>
-                  <td className="px-4 py-2.5"><Link to="/projects/$projectId/tasks/$taskId" params={{ projectId, taskId: t.key }} className="hover:text-primary">{t.title}</Link></td>
+                  <td className="px-4 py-2.5"><Link to={`/projects/${projectId}/tasks/${t.key}`} className="hover:text-primary">{t.title}</Link></td>
                   <td className="px-4 py-2.5"><TaskStatusBadge status={t.status} /></td>
                   <td className="px-4 py-2.5"><TaskPriorityBadge priority={t.priority} /></td>
                   <td className="px-4 py-2.5 text-muted-foreground">{t.assignee.name}</td>
                   <td className="px-4 py-2.5 text-xs text-muted-foreground">{t.githubConnected ? "Connected" : "Not connected"}</td>
                   <td className="px-4 py-2.5 text-xs text-muted-foreground">{t.aiAssisted ? "Assisted" : "Not assisted"}</td>
                   <td className="px-4 py-2.5 font-mono text-[11px] text-muted-foreground">{relativeTime(t.updatedAt)}</td>
-                  <td className="px-4 py-2.5"><Button size="sm" variant="ghost" asChild><Link to="/projects/$projectId/tasks/$taskId" params={{ projectId, taskId: t.key }}>Open</Link></Button></td>
+                  <td className="px-4 py-2.5"><Button size="sm" variant="ghost" asChild><Link to={`/projects/${projectId}/tasks/${t.key}`}>Open</Link></Button></td>
                 </tr>
               ))}
             </tbody>

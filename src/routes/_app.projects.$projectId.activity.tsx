@@ -1,26 +1,14 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { Activity, Bot, GitBranch, ListChecks, RefreshCcw, TestTube2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useAppStore } from "@/store/appStore";
 import type { ActivityKind } from "@/types";
 
-export const Route = createFileRoute("/_app/projects/$projectId/activity")({
-  head: () => ({
-    meta: [
-      { title: "Activity — DevFlow AI" },
-      { name: "description", content: "A timeline of task, AI, GitHub and Jira events across your DevFlow AI project." },
-      { property: "og:title", content: "Activity — DevFlow AI" },
-      { property: "og:description", content: "Timeline of task, AI, GitHub and Jira events." },
-    ],
-  }),
-  component: ActivityPage,
-});
 
 const icons: Record<ActivityKind, typeof Activity> = {
   task: ListChecks, ai: Bot, github: GitBranch, jira: RefreshCcw, test: TestTube2, code: Activity,
 };
 
-function ActivityPage() {
+export default function ActivityPage() {
   const { activities } = useAppStore();
   return (
     <div className="mx-auto max-w-3xl">

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { useParams } from "react-router-dom";
 import { useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -9,20 +9,8 @@ import { useRepositories, useRepositoryFiles, useTasks } from "@/hooks/useAppDat
 import { useAppStore } from "@/store/appStore";
 import { taskService } from "@/services/taskService";
 
-export const Route = createFileRoute("/_app/projects/$projectId/relate-task")({
-  head: () => ({
-    meta: [
-      { title: "Relate task — DevFlow AI" },
-      { name: "description", content: "Connect a Jira task with the exact GitHub files that need to change and build the AI context." },
-      { property: "og:title", content: "Relate task — DevFlow AI" },
-      { property: "og:description", content: "Connect Jira tasks with the GitHub files that need to change." },
-    ],
-  }),
-  component: RelateTaskPage,
-});
-
-function RelateTaskPage() {
-  const { projectId } = Route.useParams();
+export default function RelateTaskPage() {
+  const { projectId = "p-1" } = useParams();
   const { integrations, ai, selectFile, removeFile, setTask, logActivity } = useAppStore();
   const { data: tasks = [] } = useTasks(projectId, integrations.jiraConnected);
   const { data: repos = [] } = useRepositories();

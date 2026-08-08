@@ -107,7 +107,7 @@ export async function transitionIssue(key: string, statusId: string) {
 `;
 
 const taskCard = `import { memo } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link } from "react-router-dom";
 import type { Task } from "@/types";
 import { TaskStatusBadge } from "./TaskStatusBadge";
 import { TaskPriorityBadge } from "./TaskPriorityBadge";
@@ -120,8 +120,7 @@ interface TaskCardProps {
 export const TaskCard = memo(function TaskCard({ task, projectId }: TaskCardProps) {
   return (
     <Link
-      to="/projects/$projectId/tasks/$taskId"
-      params={{ projectId, taskId: task.key }}
+      to={\`/projects/\${projectId}/tasks/\${task.key}\`}
       className="surface block p-4 transition-colors hover:border-primary/50"
     >
       <div className="flex items-center justify-between">
@@ -135,7 +134,7 @@ export const TaskCard = memo(function TaskCard({ task, projectId }: TaskCardProp
 });
 `;
 
-const useTasks = `import { useQuery } from "@tanstack/react-query";
+const useTasks = `import { useEffect, useState } from "react";
 import { taskService } from "@/services/taskService";
 
 export function useTasks(projectId: string, enabled = true) {
@@ -148,7 +147,7 @@ export function useTasks(projectId: string, enabled = true) {
 }
 `;
 
-const loginPage = `import { useNavigate } from "@tanstack/react-router";
+const loginPage = `import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/store/appStore";
 
 export function LoginPage() {
