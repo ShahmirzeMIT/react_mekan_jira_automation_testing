@@ -18,6 +18,7 @@ import { Route as AppProjectsIndexRouteImport } from './routes/_app.projects.ind
 import { Route as AppProjectsProjectIdActivityRouteImport } from './routes/_app.projects.$projectId.activity'
 import { Route as AppProjectsProjectIdOverviewRouteImport } from './routes/_app.projects.$projectId.overview'
 import { Route as AppProjectsProjectIdTasksIndexRouteImport } from './routes/_app.projects.$projectId.tasks.index'
+import { Route as AppProjectsProjectIdTasksTaskIdRouteImport } from './routes/_app.projects.$projectId.tasks.$taskId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -66,6 +67,12 @@ const AppProjectsProjectIdTasksIndexRoute =
     path: '/projects/$projectId/tasks/',
     getParentRoute: () => AppRoute,
   } as any)
+const AppProjectsProjectIdTasksTaskIdRoute =
+  AppProjectsProjectIdTasksTaskIdRouteImport.update({
+    id: '/projects/$projectId/tasks/$taskId',
+    path: '/projects/$projectId/tasks/$taskId',
+    getParentRoute: () => AppRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByFullPath {
   '/projects/': typeof AppProjectsIndexRoute
   '/projects/$projectId/activity': typeof AppProjectsProjectIdActivityRoute
   '/projects/$projectId/overview': typeof AppProjectsProjectIdOverviewRoute
+  '/projects/$projectId/tasks/$taskId': typeof AppProjectsProjectIdTasksTaskIdRoute
   '/projects/$projectId/tasks/': typeof AppProjectsProjectIdTasksIndexRoute
 }
 export interface FileRoutesByTo {
@@ -85,6 +93,7 @@ export interface FileRoutesByTo {
   '/projects': typeof AppProjectsIndexRoute
   '/projects/$projectId/activity': typeof AppProjectsProjectIdActivityRoute
   '/projects/$projectId/overview': typeof AppProjectsProjectIdOverviewRoute
+  '/projects/$projectId/tasks/$taskId': typeof AppProjectsProjectIdTasksTaskIdRoute
   '/projects/$projectId/tasks': typeof AppProjectsProjectIdTasksIndexRoute
 }
 export interface FileRoutesById {
@@ -97,6 +106,7 @@ export interface FileRoutesById {
   '/_app/projects/': typeof AppProjectsIndexRoute
   '/_app/projects/$projectId/activity': typeof AppProjectsProjectIdActivityRoute
   '/_app/projects/$projectId/overview': typeof AppProjectsProjectIdOverviewRoute
+  '/_app/projects/$projectId/tasks/$taskId': typeof AppProjectsProjectIdTasksTaskIdRoute
   '/_app/projects/$projectId/tasks/': typeof AppProjectsProjectIdTasksIndexRoute
 }
 export interface FileRouteTypes {
@@ -109,6 +119,7 @@ export interface FileRouteTypes {
     | '/projects/'
     | '/projects/$projectId/activity'
     | '/projects/$projectId/overview'
+    | '/projects/$projectId/tasks/$taskId'
     | '/projects/$projectId/tasks/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -119,6 +130,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/projects/$projectId/activity'
     | '/projects/$projectId/overview'
+    | '/projects/$projectId/tasks/$taskId'
     | '/projects/$projectId/tasks'
   id:
     | '__root__'
@@ -130,6 +142,7 @@ export interface FileRouteTypes {
     | '/_app/projects/'
     | '/_app/projects/$projectId/activity'
     | '/_app/projects/$projectId/overview'
+    | '/_app/projects/$projectId/tasks/$taskId'
     | '/_app/projects/$projectId/tasks/'
   fileRoutesById: FileRoutesById
 }
@@ -204,6 +217,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProjectsProjectIdTasksIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/projects/$projectId/tasks/$taskId': {
+      id: '/_app/projects/$projectId/tasks/$taskId'
+      path: '/projects/$projectId/tasks/$taskId'
+      fullPath: '/projects/$projectId/tasks/$taskId'
+      preLoaderRoute: typeof AppProjectsProjectIdTasksTaskIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -213,6 +233,7 @@ interface AppRouteChildren {
   AppProjectsIndexRoute: typeof AppProjectsIndexRoute
   AppProjectsProjectIdActivityRoute: typeof AppProjectsProjectIdActivityRoute
   AppProjectsProjectIdOverviewRoute: typeof AppProjectsProjectIdOverviewRoute
+  AppProjectsProjectIdTasksTaskIdRoute: typeof AppProjectsProjectIdTasksTaskIdRoute
   AppProjectsProjectIdTasksIndexRoute: typeof AppProjectsProjectIdTasksIndexRoute
 }
 
@@ -222,6 +243,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppProjectsIndexRoute: AppProjectsIndexRoute,
   AppProjectsProjectIdActivityRoute: AppProjectsProjectIdActivityRoute,
   AppProjectsProjectIdOverviewRoute: AppProjectsProjectIdOverviewRoute,
+  AppProjectsProjectIdTasksTaskIdRoute: AppProjectsProjectIdTasksTaskIdRoute,
   AppProjectsProjectIdTasksIndexRoute: AppProjectsProjectIdTasksIndexRoute,
 }
 
