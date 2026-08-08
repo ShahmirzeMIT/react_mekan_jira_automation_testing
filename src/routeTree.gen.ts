@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppProfileRouteImport } from './routes/_app.profile'
+import { Route as AppSettingsRouteImport } from './routes/_app.settings'
 import { Route as AppProjectsIndexRouteImport } from './routes/_app.projects.index'
 import { Route as AppProjectsProjectIdActivityRouteImport } from './routes/_app.projects.$projectId.activity'
 import { Route as AppProjectsProjectIdOverviewRouteImport } from './routes/_app.projects.$projectId.overview'
@@ -34,6 +35,11 @@ const LoginRoute = LoginRouteImport.update({
 const AppProfileRoute = AppProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
 const AppProjectsIndexRoute = AppProjectsIndexRouteImport.update({
@@ -58,6 +64,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/profile': typeof AppProfileRoute
+  '/settings': typeof AppSettingsRoute
   '/projects/': typeof AppProjectsIndexRoute
   '/projects/$projectId/activity': typeof AppProjectsProjectIdActivityRoute
   '/projects/$projectId/overview': typeof AppProjectsProjectIdOverviewRoute
@@ -66,6 +73,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/profile': typeof AppProfileRoute
+  '/settings': typeof AppSettingsRoute
   '/projects': typeof AppProjectsIndexRoute
   '/projects/$projectId/activity': typeof AppProjectsProjectIdActivityRoute
   '/projects/$projectId/overview': typeof AppProjectsProjectIdOverviewRoute
@@ -76,6 +84,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/_app/profile': typeof AppProfileRoute
+  '/_app/settings': typeof AppSettingsRoute
   '/_app/projects/': typeof AppProjectsIndexRoute
   '/_app/projects/$projectId/activity': typeof AppProjectsProjectIdActivityRoute
   '/_app/projects/$projectId/overview': typeof AppProjectsProjectIdOverviewRoute
@@ -86,6 +95,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/profile'
+    | '/settings'
     | '/projects/'
     | '/projects/$projectId/activity'
     | '/projects/$projectId/overview'
@@ -94,6 +104,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/profile'
+    | '/settings'
     | '/projects'
     | '/projects/$projectId/activity'
     | '/projects/$projectId/overview'
@@ -103,6 +114,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/login'
     | '/_app/profile'
+    | '/_app/settings'
     | '/_app/projects/'
     | '/_app/projects/$projectId/activity'
     | '/_app/projects/$projectId/overview'
@@ -144,6 +156,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProfileRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/settings': {
+      id: '/_app/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/projects/': {
       id: '/_app/projects/'
       path: '/projects'
@@ -170,6 +189,7 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppProfileRoute: typeof AppProfileRoute
+  AppSettingsRoute: typeof AppSettingsRoute
   AppProjectsIndexRoute: typeof AppProjectsIndexRoute
   AppProjectsProjectIdActivityRoute: typeof AppProjectsProjectIdActivityRoute
   AppProjectsProjectIdOverviewRoute: typeof AppProjectsProjectIdOverviewRoute
@@ -177,6 +197,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppProfileRoute: AppProfileRoute,
+  AppSettingsRoute: AppSettingsRoute,
   AppProjectsIndexRoute: AppProjectsIndexRoute,
   AppProjectsProjectIdActivityRoute: AppProjectsProjectIdActivityRoute,
   AppProjectsProjectIdOverviewRoute: AppProjectsProjectIdOverviewRoute,
