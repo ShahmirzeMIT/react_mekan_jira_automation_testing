@@ -17,6 +17,7 @@ import { Route as AppSettingsRouteImport } from './routes/_app.settings'
 import { Route as AppProjectsIndexRouteImport } from './routes/_app.projects.index'
 import { Route as AppProjectsProjectIdActivityRouteImport } from './routes/_app.projects.$projectId.activity'
 import { Route as AppProjectsProjectIdOverviewRouteImport } from './routes/_app.projects.$projectId.overview'
+import { Route as AppProjectsProjectIdTasksIndexRouteImport } from './routes/_app.projects.$projectId.tasks.index'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -59,6 +60,12 @@ const AppProjectsProjectIdOverviewRoute =
     path: '/projects/$projectId/overview',
     getParentRoute: () => AppRoute,
   } as any)
+const AppProjectsProjectIdTasksIndexRoute =
+  AppProjectsProjectIdTasksIndexRouteImport.update({
+    id: '/projects/$projectId/tasks/',
+    path: '/projects/$projectId/tasks/',
+    getParentRoute: () => AppRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -68,6 +75,7 @@ export interface FileRoutesByFullPath {
   '/projects/': typeof AppProjectsIndexRoute
   '/projects/$projectId/activity': typeof AppProjectsProjectIdActivityRoute
   '/projects/$projectId/overview': typeof AppProjectsProjectIdOverviewRoute
+  '/projects/$projectId/tasks/': typeof AppProjectsProjectIdTasksIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -77,6 +85,7 @@ export interface FileRoutesByTo {
   '/projects': typeof AppProjectsIndexRoute
   '/projects/$projectId/activity': typeof AppProjectsProjectIdActivityRoute
   '/projects/$projectId/overview': typeof AppProjectsProjectIdOverviewRoute
+  '/projects/$projectId/tasks': typeof AppProjectsProjectIdTasksIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -88,6 +97,7 @@ export interface FileRoutesById {
   '/_app/projects/': typeof AppProjectsIndexRoute
   '/_app/projects/$projectId/activity': typeof AppProjectsProjectIdActivityRoute
   '/_app/projects/$projectId/overview': typeof AppProjectsProjectIdOverviewRoute
+  '/_app/projects/$projectId/tasks/': typeof AppProjectsProjectIdTasksIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -99,6 +109,7 @@ export interface FileRouteTypes {
     | '/projects/'
     | '/projects/$projectId/activity'
     | '/projects/$projectId/overview'
+    | '/projects/$projectId/tasks/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -108,6 +119,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/projects/$projectId/activity'
     | '/projects/$projectId/overview'
+    | '/projects/$projectId/tasks'
   id:
     | '__root__'
     | '/'
@@ -118,6 +130,7 @@ export interface FileRouteTypes {
     | '/_app/projects/'
     | '/_app/projects/$projectId/activity'
     | '/_app/projects/$projectId/overview'
+    | '/_app/projects/$projectId/tasks/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -184,6 +197,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProjectsProjectIdOverviewRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/projects/$projectId/tasks/': {
+      id: '/_app/projects/$projectId/tasks/'
+      path: '/projects/$projectId/tasks'
+      fullPath: '/projects/$projectId/tasks/'
+      preLoaderRoute: typeof AppProjectsProjectIdTasksIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -193,6 +213,7 @@ interface AppRouteChildren {
   AppProjectsIndexRoute: typeof AppProjectsIndexRoute
   AppProjectsProjectIdActivityRoute: typeof AppProjectsProjectIdActivityRoute
   AppProjectsProjectIdOverviewRoute: typeof AppProjectsProjectIdOverviewRoute
+  AppProjectsProjectIdTasksIndexRoute: typeof AppProjectsProjectIdTasksIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -201,6 +222,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppProjectsIndexRoute: AppProjectsIndexRoute,
   AppProjectsProjectIdActivityRoute: AppProjectsProjectIdActivityRoute,
   AppProjectsProjectIdOverviewRoute: AppProjectsProjectIdOverviewRoute,
+  AppProjectsProjectIdTasksIndexRoute: AppProjectsProjectIdTasksIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
