@@ -161,7 +161,7 @@ export const mockJiraIssuesResponse: JiraIssuesResponse = {
           assignee: {
             accountId: s.assignee.toLowerCase().replace(/\s/g, "-"),
             displayName: s.assignee,
-            emailAddress: `${s.assignee.split(" ")[0].toLowerCase()}@devflow.ai`,
+            emailAddress: `${s.assignee.split(" ")[0]!.toLowerCase()}@devflow.ai`,
             avatarUrls: {},
           },
           status: {
