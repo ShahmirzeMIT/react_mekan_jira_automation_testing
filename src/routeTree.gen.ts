@@ -17,6 +17,7 @@ import { Route as AppSettingsRouteImport } from './routes/_app.settings'
 import { Route as AppProjectsIndexRouteImport } from './routes/_app.projects.index'
 import { Route as AppProjectsProjectIdActivityRouteImport } from './routes/_app.projects.$projectId.activity'
 import { Route as AppProjectsProjectIdOverviewRouteImport } from './routes/_app.projects.$projectId.overview'
+import { Route as AppProjectsProjectIdRelateTaskRouteImport } from './routes/_app.projects.$projectId.relate-task'
 import { Route as AppProjectsProjectIdTasksIndexRouteImport } from './routes/_app.projects.$projectId.tasks.index'
 import { Route as AppProjectsProjectIdTasksTaskIdRouteImport } from './routes/_app.projects.$projectId.tasks.$taskId'
 
@@ -61,6 +62,12 @@ const AppProjectsProjectIdOverviewRoute =
     path: '/projects/$projectId/overview',
     getParentRoute: () => AppRoute,
   } as any)
+const AppProjectsProjectIdRelateTaskRoute =
+  AppProjectsProjectIdRelateTaskRouteImport.update({
+    id: '/projects/$projectId/relate-task',
+    path: '/projects/$projectId/relate-task',
+    getParentRoute: () => AppRoute,
+  } as any)
 const AppProjectsProjectIdTasksIndexRoute =
   AppProjectsProjectIdTasksIndexRouteImport.update({
     id: '/projects/$projectId/tasks/',
@@ -82,6 +89,7 @@ export interface FileRoutesByFullPath {
   '/projects/': typeof AppProjectsIndexRoute
   '/projects/$projectId/activity': typeof AppProjectsProjectIdActivityRoute
   '/projects/$projectId/overview': typeof AppProjectsProjectIdOverviewRoute
+  '/projects/$projectId/relate-task': typeof AppProjectsProjectIdRelateTaskRoute
   '/projects/$projectId/tasks/$taskId': typeof AppProjectsProjectIdTasksTaskIdRoute
   '/projects/$projectId/tasks/': typeof AppProjectsProjectIdTasksIndexRoute
 }
@@ -93,6 +101,7 @@ export interface FileRoutesByTo {
   '/projects': typeof AppProjectsIndexRoute
   '/projects/$projectId/activity': typeof AppProjectsProjectIdActivityRoute
   '/projects/$projectId/overview': typeof AppProjectsProjectIdOverviewRoute
+  '/projects/$projectId/relate-task': typeof AppProjectsProjectIdRelateTaskRoute
   '/projects/$projectId/tasks/$taskId': typeof AppProjectsProjectIdTasksTaskIdRoute
   '/projects/$projectId/tasks': typeof AppProjectsProjectIdTasksIndexRoute
 }
@@ -106,6 +115,7 @@ export interface FileRoutesById {
   '/_app/projects/': typeof AppProjectsIndexRoute
   '/_app/projects/$projectId/activity': typeof AppProjectsProjectIdActivityRoute
   '/_app/projects/$projectId/overview': typeof AppProjectsProjectIdOverviewRoute
+  '/_app/projects/$projectId/relate-task': typeof AppProjectsProjectIdRelateTaskRoute
   '/_app/projects/$projectId/tasks/$taskId': typeof AppProjectsProjectIdTasksTaskIdRoute
   '/_app/projects/$projectId/tasks/': typeof AppProjectsProjectIdTasksIndexRoute
 }
@@ -119,6 +129,7 @@ export interface FileRouteTypes {
     | '/projects/'
     | '/projects/$projectId/activity'
     | '/projects/$projectId/overview'
+    | '/projects/$projectId/relate-task'
     | '/projects/$projectId/tasks/$taskId'
     | '/projects/$projectId/tasks/'
   fileRoutesByTo: FileRoutesByTo
@@ -130,6 +141,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/projects/$projectId/activity'
     | '/projects/$projectId/overview'
+    | '/projects/$projectId/relate-task'
     | '/projects/$projectId/tasks/$taskId'
     | '/projects/$projectId/tasks'
   id:
@@ -142,6 +154,7 @@ export interface FileRouteTypes {
     | '/_app/projects/'
     | '/_app/projects/$projectId/activity'
     | '/_app/projects/$projectId/overview'
+    | '/_app/projects/$projectId/relate-task'
     | '/_app/projects/$projectId/tasks/$taskId'
     | '/_app/projects/$projectId/tasks/'
   fileRoutesById: FileRoutesById
@@ -210,6 +223,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProjectsProjectIdOverviewRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/projects/$projectId/relate-task': {
+      id: '/_app/projects/$projectId/relate-task'
+      path: '/projects/$projectId/relate-task'
+      fullPath: '/projects/$projectId/relate-task'
+      preLoaderRoute: typeof AppProjectsProjectIdRelateTaskRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/projects/$projectId/tasks/': {
       id: '/_app/projects/$projectId/tasks/'
       path: '/projects/$projectId/tasks'
@@ -233,6 +253,7 @@ interface AppRouteChildren {
   AppProjectsIndexRoute: typeof AppProjectsIndexRoute
   AppProjectsProjectIdActivityRoute: typeof AppProjectsProjectIdActivityRoute
   AppProjectsProjectIdOverviewRoute: typeof AppProjectsProjectIdOverviewRoute
+  AppProjectsProjectIdRelateTaskRoute: typeof AppProjectsProjectIdRelateTaskRoute
   AppProjectsProjectIdTasksTaskIdRoute: typeof AppProjectsProjectIdTasksTaskIdRoute
   AppProjectsProjectIdTasksIndexRoute: typeof AppProjectsProjectIdTasksIndexRoute
 }
@@ -243,6 +264,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppProjectsIndexRoute: AppProjectsIndexRoute,
   AppProjectsProjectIdActivityRoute: AppProjectsProjectIdActivityRoute,
   AppProjectsProjectIdOverviewRoute: AppProjectsProjectIdOverviewRoute,
+  AppProjectsProjectIdRelateTaskRoute: AppProjectsProjectIdRelateTaskRoute,
   AppProjectsProjectIdTasksTaskIdRoute: AppProjectsProjectIdTasksTaskIdRoute,
   AppProjectsProjectIdTasksIndexRoute: AppProjectsProjectIdTasksIndexRoute,
 }
