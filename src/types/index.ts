@@ -45,6 +45,7 @@ export interface Task {
   aiState?: "none" | "assisted" | "generated" | "reviewed";
   jiraSynced: boolean;
   githubConnected: boolean;
+  active?: boolean;
   comments: TaskComment[];
   createdAt: string;
   updatedAt: string;
@@ -63,6 +64,8 @@ export interface Project {
   tasks: number;
   completed: number;
   aiAssisted: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Repository {
@@ -105,13 +108,7 @@ export interface PullRequest {
   comments: number;
 }
 
-export type ActivityKind =
-  | "task"
-  | "ai"
-  | "github"
-  | "jira"
-  | "test"
-  | "code";
+export type ActivityKind = "task" | "ai" | "github" | "jira" | "test" | "code";
 
 export interface ActivityEvent {
   id: string;
@@ -124,13 +121,7 @@ export interface ActivityEvent {
 }
 
 export type AIStatus =
-  | "ready"
-  | "analyzing"
-  | "generating"
-  | "reviewing"
-  | "changes_ready"
-  | "applied"
-  | "error";
+  "ready" | "analyzing" | "generating" | "reviewing" | "changes_ready" | "applied" | "error";
 
 export interface AIMessage {
   id: string;
@@ -166,12 +157,32 @@ export interface JiraIssue {
     summary: string;
     description?: string;
     labels?: string[];
-    issuetype: { id: string; name: string; subtask: boolean; hierarchyLevel: number; description: string; iconUrl: string; self: string };
+    issuetype: {
+      id: string;
+      name: string;
+      subtask: boolean;
+      hierarchyLevel: number;
+      description: string;
+      iconUrl: string;
+      self: string;
+    };
     created: string;
     updated: string;
-    project: { self: string; id: string; key: string; name: string; projectTypeKey: string; simplified: boolean };
+    project: {
+      self: string;
+      id: string;
+      key: string;
+      name: string;
+      projectTypeKey: string;
+      simplified: boolean;
+    };
     priority: { self: string; iconUrl: string; name: string; id: string };
-    assignee?: { accountId: string; displayName: string; emailAddress: string; avatarUrls: Record<string, string> };
+    assignee?: {
+      accountId: string;
+      displayName: string;
+      emailAddress: string;
+      avatarUrls: Record<string, string>;
+    };
     status: {
       self: string;
       description: string;

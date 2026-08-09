@@ -58,6 +58,7 @@ export const taskService = {
       aiState: "none",
       jiraSynced: false,
       githubConnected: false,
+      active: true,
       comments: [],
       createdAt: now,
       updatedAt: now,

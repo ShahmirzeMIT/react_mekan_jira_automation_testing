@@ -1,22 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatCard } from "@/components/common/StatCard";
 import { ConnectionBadge } from "@/components/common/Badges";
 import { useAppStore } from "@/store/appStore";
 
-export const Route = createFileRoute("/_app/profile")({
-  head: () => ({
-    meta: [
-      { title: "Profile — DevFlow AI" },
-      { name: "description", content: "Your DevFlow AI identity, connected accounts, developer preferences and productivity statistics." },
-      { property: "og:title", content: "Profile — DevFlow AI" },
-      { property: "og:description", content: "Your DevFlow AI identity and productivity statistics." },
-    ],
-  }),
-  component: ProfilePage,
-});
-
-function ProfilePage() {
+export default function ProfilePage() {
   const { user } = useAppStore();
   return (
     <div className="mx-auto max-w-4xl">

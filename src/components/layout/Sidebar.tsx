@@ -1,4 +1,4 @@
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, NavLink, useParams } from "react-router-dom";
 import {
   Activity,
   ChevronsLeft,
@@ -29,32 +29,31 @@ interface Item {
   label: string;
   icon: LucideIcon;
   to: string;
-  params?: Record<string, string>;
 }
 
 export function Sidebar() {
   const { sidebarCollapsed, toggleSidebar, user, signOut } = useAppStore();
-  const params = useParams({ strict: false }) as { projectId?: string };
+  const params = useParams<{ projectId?: string }>();
   const projectId = params.projectId ?? "p-1";
 
   const groups: { title: string; items: Item[] }[] = [
     {
       title: "Overview",
-      items: [{ label: "Overview", icon: LayoutDashboard, to: "/projects/$projectId/overview", params: { projectId } }],
+      items: [{ label: "Overview", icon: LayoutDashboard, to: `/projects/${projectId}/overview` }],
     },
     {
       title: "Development",
       items: [
-        { label: "Tasks", icon: ListChecks, to: "/projects/$projectId/tasks", params: { projectId } },
-        { label: "Relate Task", icon: Link2, to: "/projects/$projectId/relate-task", params: { projectId } },
-        { label: "AI Workspace", icon: Sparkles, to: "/projects/$projectId/ai-workspace", params: { projectId } },
-        { label: "GitHub", icon: Github, to: "/projects/$projectId/github", params: { projectId } },
+        { label: "Tasks", icon: ListChecks, to: `/projects/${projectId}/tasks` },
+        { label: "Relate Task", icon: Link2, to: `/projects/${projectId}/relate-task` },
+        { label: "AI Workspace", icon: Sparkles, to: `/projects/${projectId}/ai-workspace` },
+        { label: "GitHub", icon: Github, to: `/projects/${projectId}/github` },
       ],
     },
     {
       title: "Insights",
       items: [
-        { label: "Activity", icon: Activity, to: "/projects/$projectId/activity", params: { projectId } },
+        { label: "Activity", icon: Activity, to: `/projects/${projectId}/activity` },
         { label: "Projects", icon: FolderKanban, to: "/projects" },
       ],
     },
@@ -100,17 +99,15 @@ export function Sidebar() {
             <ul className="space-y-0.5">
               {group.items.map((item) => (
                 <li key={item.label}>
-                  <Link
+                  <NavLink
                     to={item.to}
-                    {...(item.params ? { params: item.params } : {})}
                     title={item.label}
                     aria-label={item.label}
-                    className="flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[status=active]:bg-sidebar-accent data-[status=active]:text-sidebar-accent-foreground"
-                    activeProps={{ className: "bg-sidebar-accent text-sidebar-accent-foreground font-medium" }}
+                    className={({ isActive }) => cn("flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground", isActive && "bg-sidebar-accent text-sidebar-accent-foreground font-medium")}
                   >
                     <item.icon className="size-4 shrink-0" aria-hidden />
                     {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
-                  </Link>
+                  </NavLink>
                 </li>
               ))}
             </ul>

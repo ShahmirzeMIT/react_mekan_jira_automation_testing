@@ -1,24 +1,11 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+// LoginPage.tsx
+import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { ArrowRight, Bot, CheckCircle2, Code2, GitBranch, ListChecks, TestTube2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { FullScreenLoader } from "@/components/common/States";
 import { useAppStore } from "@/store/appStore";
-import { authService } from "@/services/authService";
-
-export const Route = createFileRoute("/login")({
-  ssr: false,
-  head: () => ({
-    meta: [
-      { title: "Sign in — DevFlow AI" },
-      { name: "description", content: "Sign in with Google to open your DevFlow AI workspace and connect Jira, GitHub and AI-assisted development." },
-      { property: "og:title", content: "Sign in — DevFlow AI" },
-      { property: "og:description", content: "Sign in with Google to open your DevFlow AI workspace." },
-    ],
-  }),
-  component: LoginPage,
-});
 
 const steps = [
   { label: "Jira Task", icon: ListChecks },
@@ -29,13 +16,15 @@ const steps = [
   { label: "Completed Task", icon: CheckCircle2 },
 ];
 
-function LoginPage() {
+export default function LoginPage() {
   const { signIn, isAuthenticated, isLoading } = useAppStore();
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) navigate({ to: "/projects", replace: true });
+    if (!isLoading && isAuthenticated) {
+      navigate("/projects", { replace: true });
+    }
   }, [isLoading, isAuthenticated, navigate]);
 
   if (isLoading) return <FullScreenLoader label="Checking your session" />;
@@ -45,8 +34,9 @@ function LoginPage() {
     try {
       await signIn();
       toast.success("Signed in successfully.");
-      navigate({ to: "/projects", replace: true });
-    } catch {
+      navigate("/projects", { replace: true });
+    } catch (error) {
+      console.error("Sign-in error:", error);
       toast.error("Google sign-in failed. Please try again.");
     } finally {
       setBusy(false);
@@ -57,7 +47,9 @@ function LoginPage() {
     <div className="grid min-h-screen lg:grid-cols-[1.1fr_1fr]">
       <section className="relative hidden flex-col justify-between border-r border-border bg-sidebar p-12 lg:flex">
         <div className="flex items-center gap-2">
-          <span className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-semibold">D</span>
+          <span className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-semibold">
+            D
+          </span>
           <span className="text-sm font-semibold tracking-tight">DevFlow AI</span>
         </div>
         <div className="max-w-lg">
@@ -77,7 +69,9 @@ function LoginPage() {
                   {String(i + 1).padStart(2, "0")}
                 </span>
                 <span className="text-sm">{s.label}</span>
-                {i < steps.length - 1 && <ArrowRight className="ml-auto size-3.5 text-border" aria-hidden />}
+                {i < steps.length - 1 && (
+                  <ArrowRight className="ml-auto size-3.5 text-border" aria-hidden />
+                )}
               </li>
             ))}
           </ul>
@@ -92,19 +86,20 @@ function LoginPage() {
           <h2 className="text-lg font-semibold tracking-tight">Welcome to DevFlow AI</h2>
           <p className="mt-1.5 text-sm text-muted-foreground">Sign in to continue to your workspace.</p>
 
-          <Button className="mt-8 w-full" size="lg" onClick={handleGoogle} disabled={busy}>
+          <Button 
+            className="mt-8 w-full" 
+            size="lg" 
+            onClick={handleGoogle} 
+            disabled={busy}
+          >
             <svg viewBox="0 0 24 24" className="size-4" aria-hidden>
-              <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.24 1.4-1.7 4.1-5.5 4.1-3.3 0-6-2.7-6-6.1s2.7-6.1 6-6.1c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.7 3.4 14.6 2.5 12 2.5 6.9 2.5 2.8 6.6 2.8 11.9S6.9 21.3 12 21.3c5.9 0 9.8-4.1 9.8-9.9 0-.7-.1-1.1-.2-1.6H12z" />
+              <path
+                fill="#EA4335"
+                d="M12 10.2v3.9h5.5c-.24 1.4-1.7 4.1-5.5 4.1-3.3 0-6-2.7-6-6.1s2.7-6.1 6-6.1c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.7 3.4 14.6 2.5 12 2.5 6.9 2.5 2.8 6.6 2.8 11.9S6.9 21.3 12 21.3c5.9 0 9.8-4.1 9.8-9.9 0-.7-.1-1.1-.2-1.6H12z"
+              />
             </svg>
             {busy ? "Signing in…" : "Continue with Google"}
           </Button>
-
-          {!authService.isFirebaseConfigured && (
-            <p className="mt-4 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
-              Firebase environment variables are not set yet, so sign-in uses a local demo identity.
-              Add the <span className="font-mono">VITE_FIREBASE_*</span> values to enable real Google authentication.
-            </p>
-          )}
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
             By continuing, you agree to our Terms and Privacy Policy.

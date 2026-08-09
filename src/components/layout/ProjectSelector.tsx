@@ -1,4 +1,4 @@
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "react-router-dom";
 import { useProjects } from "@/hooks/useAppData";
 import {
   Select,
@@ -15,7 +15,7 @@ export function ProjectSelector({ projectId }: { projectId: string }) {
   return (
     <Select
       value={projects.some((p) => p.id === projectId) ? projectId : ""}
-      onValueChange={(id) => navigate({ to: "/projects/$projectId/overview", params: { projectId: id } })}
+      onValueChange={(id) => navigate(`/projects/${id}/overview`)}
     >
       <SelectTrigger className="h-9 w-full text-sm" aria-label="Select project">
         <SelectValue placeholder="Select project" />
