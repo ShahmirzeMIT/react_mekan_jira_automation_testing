@@ -8,6 +8,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { onIdTokenChanged, type User as FirebaseUser } from "firebase/auth";
+import { collection, getDocs } from "firebase/firestore";
+import { getFirebaseAuth } from "@/config/firebase";
+import { db } from "@/config/firebase";
 import { authService } from "@/services/authService";
 import { mockActivities } from "@/mock/activities";
 import type {
@@ -22,6 +26,8 @@ import type {
 
 interface IntegrationState {
   jiraConnected: boolean;
+  /** True after the signed-in user's Jira connection has been checked in Firestore. */
+  jiraConnectionChecked: boolean;
   githubConnected: boolean;
   jiraProject: string | null;
   githubRepository: string | null;
@@ -41,9 +47,50 @@ interface AIWorkspaceState {
   previewOpen: boolean;
 }
 
+type Theme = "light" | "dark";
+const THEME_STORAGE_KEY = "devflow.theme";
+const SIDEBAR_STORAGE_KEY = "devflow.sidebar-collapsed";
+
+type JiraConnection = {
+  jiraProject: string | null;
+  jiraLastSync: string | null;
+};
+
+async function findJiraConnection(email: string): Promise<JiraConnection | null> {
+  if (!db) return null;
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const snapshot = await getDocs(collection(db, "jira_users"));
+  const document = snapshot.docs.find((item) => {
+    const data = item.data();
+    const jiraEmail = data["jiraUserEmail"];
+    return typeof jiraEmail === "string" && jiraEmail.trim().toLowerCase() === normalizedEmail;
+  });
+
+  if (!document) return null;
+
+  const data = document.data();
+  return {
+    jiraProject: typeof data["jiraDisplayName"] === "string" ? data["jiraDisplayName"] : null,
+    jiraLastSync: typeof data["lastSyncAt"] === "string" ? data["lastSyncAt"] : null,
+  };
+}
+
+function getStoredTheme(): Theme {
+  if (typeof window === "undefined") return "dark";
+  return localStorage.getItem(THEME_STORAGE_KEY) === "light" ? "light" : "dark";
+}
+
+function getStoredSidebarState(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true";
+}
+
 interface AppStore {
   // auth
   user: AuthUser | null;
+  /** The Firebase ID token for authenticated API requests. Kept in memory only. */
+  idToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   signIn: () => Promise<void>;
@@ -51,6 +98,8 @@ interface AppStore {
   // ui
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
+  theme: Theme;
+  toggleTheme: () => void;
   commandOpen: boolean;
   setCommandOpen: (open: boolean) => void;
   // integrations
@@ -61,7 +110,11 @@ interface AppStore {
   disconnectGithub: () => void;
   // activity
   activities: ActivityEvent[];
-  logActivity: (kind: ActivityKind, title: string, meta?: { taskKey?: string; repository?: string }) => void;
+  logActivity: (
+    kind: ActivityKind,
+    title: string,
+    meta?: { taskKey?: string; repository?: string },
+  ) => void;
   // ai workspace
   ai: AIWorkspaceState;
   setTask: (key: string | null) => void;
@@ -94,12 +147,15 @@ const initialAI: AIWorkspaceState = {
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [idToken, setIdToken] = useState<string | null>(null);
   const [isLoading, setLoading] = useState(true);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(getStoredSidebarState);
+  const [theme, setTheme] = useState<Theme>(getStoredTheme);
   const [commandOpen, setCommandOpen] = useState(false);
   const [activities, setActivities] = useState<ActivityEvent[]>(mockActivities);
   const [integrations, setIntegrations] = useState<IntegrationState>({
     jiraConnected: false,
+    jiraConnectionChecked: false,
     githubConnected: false,
     jiraProject: null,
     githubRepository: null,
@@ -109,23 +165,134 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [ai, setAI] = useState<AIWorkspaceState>(initialAI);
 
   useEffect(() => {
-    const unsubscribe = authService.onAuthStateChanged((next) => {
-      setUser(next);
-      setLoading(false);
-    });
-    return unsubscribe;
+    let refreshInterval: ReturnType<typeof setInterval> | undefined;
+    let unsubscribe = () => {};
+    let isMounted = true;
+
+    const clearRefreshInterval = () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = undefined;
+      }
+    };
+
+    const refreshToken = async (firebaseUser: FirebaseUser): Promise<string> => {
+      // `true` forces Firebase to obtain a new ID token instead of returning a cached one.
+      const token = await firebaseUser.getIdToken(true);
+      if (isMounted) setIdToken(token);
+      return token;
+    };
+
+    const initializeAuth = () => {
+      const auth = getFirebaseAuth();
+      if (!auth) {
+        setUser(null);
+        setIdToken(null);
+        setIntegrations((current) => ({ ...current, jiraConnected: false, jiraConnectionChecked: true }));
+        setLoading(false);
+        return;
+      }
+
+      // Unlike onAuthStateChanged, this also runs whenever Firebase refreshes an ID token.
+      unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
+        clearRefreshInterval();
+
+        if (!firebaseUser) {
+          if (isMounted) {
+            setUser(null);
+            setIdToken(null);
+            setIntegrations((current) => ({ ...current, jiraConnected: false, jiraConnectionChecked: true }));
+            setLoading(false);
+          }
+          return;
+        }
+
+        try {
+          // No force refresh is necessary on initial load: Firebase refreshes expired tokens itself.
+          const token = await firebaseUser.getIdToken();
+          if (!isMounted) return;
+
+          const appUser = authService.getCurrentUser();
+          setUser(appUser);
+          setIdToken(token);
+
+          const jiraConnection = appUser?.email
+            ? await findJiraConnection(appUser.email).catch((error: unknown) => {
+                console.error("Unable to read Jira connection:", error);
+                return null;
+              })
+            : null;
+          if (!isMounted) return;
+
+          setIntegrations((current) => ({
+            ...current,
+            jiraConnected: Boolean(jiraConnection),
+            jiraConnectionChecked: true,
+            jiraProject: jiraConnection?.jiraProject ?? null,
+            jiraLastSync: jiraConnection?.jiraLastSync ?? null,
+          }));
+          setLoading(false);
+
+          // ID tokens normally last one hour; renew early while the app remains open.
+          refreshInterval = setInterval(
+            () => {
+              void refreshToken(firebaseUser).catch((error) => {
+                console.error("Firebase token refresh failed:", error);
+              });
+            },
+            50 * 60 * 1000,
+          );
+        } catch (error) {
+          console.error("Firebase token initialization failed:", error);
+          if (isMounted) {
+            setUser(null);
+            setIdToken(null);
+            setIntegrations((current) => ({ ...current, jiraConnected: false, jiraConnectionChecked: true }));
+            setLoading(false);
+          }
+        }
+      });
+    };
+
+    initializeAuth();
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+      clearRefreshInterval();
+    };
   }, []);
 
-  const logActivity = useCallback<AppStore["logActivity"]>((kind, title, meta) => {
-    setActivities((prev) => [
-      { id: `a-${Date.now()}`, kind, title, user: user?.name || "User", time: "Just now", ...meta },
-      ...prev,
-    ]);
-  }, [user]);
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
+
+  const logActivity = useCallback<AppStore["logActivity"]>(
+    (kind, title, meta) => {
+      setActivities((prev) => [
+        {
+          id: `a-${Date.now()}`,
+          kind,
+          title,
+          user: user?.name || "User",
+          time: "Just now",
+          ...meta,
+        },
+        ...prev,
+      ]);
+    },
+    [user],
+  );
 
   const value = useMemo<AppStore>(
     () => ({
       user,
+      idToken,
       isAuthenticated: Boolean(user),
       isLoading,
       signIn: async () => {
@@ -143,12 +310,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         try {
           await authService.signOut();
           setUser(null);
+          setIdToken(null);
         } catch (error) {
           console.error("Sign out failed:", error);
           throw error;
         } finally {
           setIntegrations({
             jiraConnected: false,
+            jiraConnectionChecked: false,
             githubConnected: false,
             jiraProject: null,
             githubRepository: null,
@@ -161,24 +330,49 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       },
       sidebarCollapsed,
       toggleSidebar: () => setSidebarCollapsed((c) => !c),
+      theme,
+      toggleTheme: () => setTheme((current) => (current === "dark" ? "light" : "dark")),
       commandOpen,
       setCommandOpen,
       integrations,
       connectJira: (project) =>
-        setIntegrations((s) => ({ ...s, jiraConnected: true, jiraProject: project, jiraLastSync: "Just now" })),
+        setIntegrations((s) => ({
+          ...s,
+          jiraConnected: true,
+          jiraProject: project,
+          jiraLastSync: "Just now",
+        })),
       disconnectJira: () =>
-        setIntegrations((s) => ({ ...s, jiraConnected: false, jiraProject: null, jiraLastSync: null })),
+        setIntegrations((s) => ({
+          ...s,
+          jiraConnected: false,
+          jiraProject: null,
+          jiraLastSync: null,
+        })),
       connectGithub: (repository) =>
-        setIntegrations((s) => ({ ...s, githubConnected: true, githubRepository: repository, githubLastSync: "Just now" })),
+        setIntegrations((s) => ({
+          ...s,
+          githubConnected: true,
+          githubRepository: repository,
+          githubLastSync: "Just now",
+        })),
       disconnectGithub: () =>
-        setIntegrations((s) => ({ ...s, githubConnected: false, githubRepository: null, githubLastSync: null })),
+        setIntegrations((s) => ({
+          ...s,
+          githubConnected: false,
+          githubRepository: null,
+          githubLastSync: null,
+        })),
       activities,
       logActivity,
       ai,
       setTask: (key) => setAI((s) => ({ ...s, selectedTaskKey: key })),
       selectFile: (path) =>
-        setAI((s) => (s.selectedFiles.includes(path) ? s : { ...s, selectedFiles: [...s.selectedFiles, path] })),
-      removeFile: (path) => setAI((s) => ({ ...s, selectedFiles: s.selectedFiles.filter((p) => p !== path) })),
+        setAI((s) =>
+          s.selectedFiles.includes(path) ? s : { ...s, selectedFiles: [...s.selectedFiles, path] },
+        ),
+      removeFile: (path) =>
+        setAI((s) => ({ ...s, selectedFiles: s.selectedFiles.filter((p) => p !== path) })),
       setSelectedFiles: (paths) => setAI((s) => ({ ...s, selectedFiles: paths })),
       pushMessage: (message) => setAI((s) => ({ ...s, messages: [...s.messages, message] })),
       setMessages: (messages) => setAI((s) => ({ ...s, messages })),
@@ -197,7 +391,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setTestResults: (testResults) => setAI((s) => ({ ...s, testResults })),
       setPreviewOpen: (previewOpen) => setAI((s) => ({ ...s, previewOpen })),
     }),
-    [user, isLoading, sidebarCollapsed, commandOpen, integrations, activities, ai, logActivity],
+    [
+      user,
+      idToken,
+      isLoading,
+      sidebarCollapsed,
+      theme,
+      commandOpen,
+      integrations,
+      activities,
+      ai,
+      logActivity,
+    ],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -1,7 +1,8 @@
 import { Link, useParams } from "react-router-dom";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ListChecks, Pencil, Play, Plus, Power, Square } from "lucide-react";
 import { toast } from "sonner";
+import { collection, getDocs } from "firebase/firestore";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,35 +12,163 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState, ListSkeleton } from "@/components/common/States";
 import { ConnectionBadge, TaskPriorityBadge, TaskStatusBadge } from "@/components/common/Badges";
-import { useTasks } from "@/hooks/useAppData";
 import { useAppStore } from "@/store/appStore";
 import { taskService, type TaskFilters } from "@/services/taskService";
 import { jiraService } from "@/services/jiraService";
 import { relativeTime, statusLabel } from "@/utils";
-import type { TaskPriority, TaskStatus } from "@/types";
+import type { Task, TaskPriority, TaskStatus } from "@/types";
+import { db } from "@/config/firebase";
+import { useAuth } from "@/hooks/useAuth";
+
+
 export default function TasksPage() {
   const { projectId = "p-1" } = useParams();
-  const { integrations, connectJira, logActivity } = useAppStore();
-  const { data: tasks = [], isLoading, refetch } = useTasks(projectId, integrations.jiraConnected);
+  const { integrations, idToken, logActivity } = useAppStore();
   const [filters, setFilters] = useState<TaskFilters>({ search: "" });
   const [connectOpen, setConnectOpen] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [form, setForm] = useState({ url: "https://devflow.atlassian.net", workspace: "devflow", project: "DEV" });
   const [newTask, setNewTask] = useState({ title: "", description: "", priority: "MEDIUM" as TaskPriority });
   const [taskOpen, setTaskOpen] = useState(false);
-  const [editingTask, setEditingTask] = useState<(typeof tasks)[number] | null>(null);
   const [saving, setSaving] = useState(false);
-
+  const [jiraAccessToken, setJiraAccessToken] = useState<string | null>(null);
+  const [jiraCloudId, setJiraCloudId] = useState<string | null>(null);
+  const [jiraAccountId, setJiraAccountId] = useState<string | null>(null);
+  const [jiraUserEmail, setJiraUserEmail] = useState<string | null>(null);
+  const [jiraUserDataLoading, setJiraUserDataLoading] = useState(true);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const hasJiraConnection = integrations.jiraConnected || Boolean(jiraAccessToken);
   const visible = useMemo(() => taskService.filterTasks(tasks, filters), [tasks, filters]);
+  const [editingTask, setEditingTask] = useState<(typeof tasks)[number] | null>(null);
+  
+  // Get current user from Firebase Auth
+  const { user, loading: authLoading } = useAuth();
+
+  const refetch = useCallback(async () => {
+    if (!jiraAccessToken || !jiraCloudId || !jiraAccountId) {
+      setTasks([]);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      setTasks(await jiraService.getCanvasTasks(projectId, {
+        accessToken: jiraAccessToken,
+        cloudId: jiraCloudId,
+        accountId: jiraAccountId,
+      }));
+    } catch (error) {
+      console.error("Unable to load Jira issues:", error);
+      setTasks([]);
+      toast.error(error instanceof Error ? error.message : "Unable to load Jira issues.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [jiraAccessToken, jiraCloudId, jiraAccountId, projectId]);
+
+  useEffect(() => {
+    void refetch();
+  }, [refetch]);
+  
+
+  // Fetch Jira user data from Firestore
+  useEffect(() => {
+    const fetchJiraUserData = async () => {
+      setJiraUserDataLoading(true);
+      if (!user?.email) {
+        setJiraUserDataLoading(false);
+        return;
+      }
+
+      if (!db) {
+        setJiraUserDataLoading(false);
+        return;
+      }
+
+      try {
+        const snapshot = await getDocs(collection(db, "jira_users"));
+        console.log(user.email,'user.email');
+        
+        const normalizedUserEmail = user.email.trim().toLowerCase();
+        console.log(normalizedUserEmail,'normalizedUserEmail');
+        const jiraUsers: Array<Record<string, unknown> & { id: string }> = snapshot.docs.map((document) => ({
+          id: document.id,
+          ...document.data(),
+        }));
+      
+        
+        const emailFor = (data: Record<string, unknown>) => {
+          const integration = data["jiraIntegration"];
+          const integrationEmail =
+            typeof integration === "object" && integration !== null
+              ? (integration as Record<string, unknown>)["jiraUserEmail"]
+              : undefined;
+          const email = data["jiraUserEmail"] ?? integrationEmail ?? data["jiraEmail"] ?? data["email"] ?? data["userEmail"];
+          return typeof email === "string" ? email.trim().toLowerCase() : null;
+        };
+
+        const jiraUser = jiraUsers.find((data) => {
+          const integration = data["jiraIntegration"];
+          const connected = data["isActive"] === true || (
+            typeof integration === "object" &&
+            integration !== null &&
+            (integration as Record<string, unknown>)["connected"] === true
+          );
+          return (
+            emailFor(data) === normalizedUserEmail &&
+            connected &&
+            typeof data["accessToken"] === "string"
+          );
+        });
+
+        console.log("Jira connection found:", Boolean(jiraUser), "document:", jiraUser?.id);
+
+        if (jiraUser) {
+          const integration = jiraUser["jiraIntegration"] as Record<string, unknown> | undefined;
+          const accessToken = typeof jiraUser["accessToken"] === "string" ? jiraUser["accessToken"] : null;
+          const cloudId = jiraUser["defaultCloudId"] ?? integration?.["defaultCloudId"];
+          const accountId = jiraUser["jiraAccountId"] ?? integration?.["jiraAccountId"];
+          setJiraAccessToken(accessToken);
+          setJiraCloudId(typeof cloudId === "string" ? cloudId : null);
+          setJiraAccountId(typeof accountId === "string" ? accountId : null);
+          setJiraUserEmail(emailFor(jiraUser) ?? user.email);
+          console.log("Jira Access Token:", accessToken);
+          console.log("Jira User Email:", user.email);
+        } else {
+          setJiraAccessToken(null);
+          setJiraCloudId(null);
+          setJiraAccountId(null);
+          setJiraUserEmail(null);
+        }
+      } catch (error) {
+        console.error("Error fetching Jira user data:", error);
+        toast.error("Failed to fetch Jira user data");
+      } finally {
+        setJiraUserDataLoading(false);
+      }
+    };
+
+    fetchJiraUserData();
+  }, [user?.email, user?.uid]);
+
+  // Log Jira data whenever it changes
+  useEffect(() => {
+    if (jiraAccessToken) {
+      console.log("Current Jira Access Token:", jiraAccessToken);
+      console.log("Current Jira User Email:", jiraUserEmail);
+    }
+  }, [jiraAccessToken, jiraUserEmail]);
 
   async function handleConnect() {
     setConnecting(true);
-    await jiraService.connect(form);
-    connectJira(form.project);
-    logActivity("jira", `Jira workspace ${form.workspace} connected`);
-    setConnecting(false);
-    setConnectOpen(false);
-    toast.success("Jira connected successfully.");
+    try {
+      sessionStorage.setItem("devflow.jira.return-project", projectId);
+      const authorizationUrl = await jiraService.beginOAuth(idToken);
+      window.location.assign(authorizationUrl);
+    } catch (error) {
+      setConnecting(false);
+      toast.error(error instanceof Error ? error.message : "Unable to start Jira connection.");
+    }
   }
 
   const connectModal = (
@@ -47,17 +176,13 @@ export default function TasksPage() {
       <DialogTrigger asChild><Button size="sm">Connect Jira</Button></DialogTrigger>
       <DialogContent>
         <DialogHeader><DialogTitle>Connect Jira</DialogTitle></DialogHeader>
-        <div className="grid gap-3">
-          <div className="grid gap-1.5"><Label>Jira URL</Label><Input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} /></div>
-          <div className="grid gap-1.5"><Label>Workspace</Label><Input value={form.workspace} onChange={(e) => setForm({ ...form, workspace: e.target.value })} /></div>
-          <div className="grid gap-1.5"><Label>Project</Label><Input value={form.project} onChange={(e) => setForm({ ...form, project: e.target.value })} /></div>
-        </div>
+        <p className="text-sm text-muted-foreground">You will be redirected to Atlassian to authorize this workspace. After approval, DevFlow returns you to your task list.</p>
         <DialogFooter><Button onClick={handleConnect} disabled={connecting}>{connecting ? "Connecting…" : "Connect Jira"}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   );
 
-  if (!integrations.jiraConnected) {
+  if (!authLoading && integrations.jiraConnectionChecked && !jiraUserDataLoading && !hasJiraConnection) {
     return (
       <div className="mx-auto max-w-3xl">
         <PageHeader title="Tasks" actions={connectModal} />
@@ -106,27 +231,52 @@ export default function TasksPage() {
 
   return (
     <div className="mx-auto max-w-7xl">
-      <PageHeader title="Tasks"
-        badge={<ConnectionBadge label={`Jira ${integrations.jiraProject}`} connected />}
-        description={`Tasks: ${tasks.length} · Last synchronized: ${integrations.jiraLastSync}`}
+      <PageHeader 
+        title="Tasks"
+        badge={
+          <div className="flex items-center gap-2">
+            <ConnectionBadge label={`Jira ${integrations.jiraProject}`} connected />
+            {jiraAccessToken && (
+              <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+                ✓ Jira Connected
+              </span>
+            )}
+          </div>
+        }
+        description={`Tasks: ${tasks.length} · Last synchronized: ${integrations.jiraLastSync}${jiraUserEmail ? ` · Jira User: ${jiraUserEmail}` : ""}`}
         actions={
-          <Dialog open={taskOpen} onOpenChange={setTaskOpen}>
-            <DialogTrigger asChild><Button size="sm"><Plus className="size-4" /> New Task</Button></DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Create task</DialogTitle></DialogHeader>
-              <div className="grid gap-3">
-                <div className="grid gap-1.5"><Label>Title</Label><Input value={newTask.title} onChange={(e) => setNewTask({ ...newTask, title: e.target.value })} /></div>
-                <div className="grid gap-1.5"><Label>Description</Label><Textarea value={newTask.description} onChange={(e) => setNewTask({ ...newTask, description: e.target.value })} /></div>
-                <div className="grid gap-1.5"><Label>Priority</Label>
-                  <Select value={newTask.priority} onValueChange={(v) => setNewTask({ ...newTask, priority: v as TaskPriority })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{["LOWEST","LOW","MEDIUM","HIGH","HIGHEST"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-                  </Select>
+          <div className="flex items-center gap-2">
+            {jiraAccessToken && (
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={() => {
+                  console.log("Jira Access Token:", jiraAccessToken);
+                  console.log("Jira User Email:", jiraUserEmail);
+                  toast.info("Jira data logged to console");
+                }}
+              >
+                Log Jira Data
+              </Button>
+            )}
+            <Dialog open={taskOpen} onOpenChange={setTaskOpen}>
+              <DialogTrigger asChild><Button size="sm"><Plus className="size-4" /> New Task</Button></DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle>Create task</DialogTitle></DialogHeader>
+                <div className="grid gap-3">
+                  <div className="grid gap-1.5"><Label>Title</Label><Input value={newTask.title} onChange={(e) => setNewTask({ ...newTask, title: e.target.value })} /></div>
+                  <div className="grid gap-1.5"><Label>Description</Label><Textarea value={newTask.description} onChange={(e) => setNewTask({ ...newTask, description: e.target.value })} /></div>
+                  <div className="grid gap-1.5"><Label>Priority</Label>
+                    <Select value={newTask.priority} onValueChange={(v) => setNewTask({ ...newTask, priority: v as TaskPriority })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>{["LOWEST","LOW","MEDIUM","HIGH","HIGHEST"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              </div>
-              <DialogFooter><Button onClick={createTask}>Create Task</Button></DialogFooter>
-            </DialogContent>
-          </Dialog>
+                <DialogFooter><Button onClick={createTask}>Create Task</Button></DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         }
       />
 

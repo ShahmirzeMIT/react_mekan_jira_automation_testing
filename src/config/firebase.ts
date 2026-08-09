@@ -32,7 +32,28 @@ let authInstance: Auth | null = null;
 let appInstance: FirebaseApp | null = null;
 let firestoreInstance: Firestore | null = null;
 
-export function getFirebaseAuth(): Auth | null {
+// Initialize Firebase app
+function initializeFirebaseApp(): FirebaseApp | null {
+  try {
+    if (appInstance) return appInstance;
+    
+    if (getApps().length > 0) {
+      appInstance = getApp();
+    } else if (firebaseEnabled) {
+      appInstance = initializeApp(firebaseConfig);
+    } else {
+      console.error("Firebase is not configured properly.");
+      return null;
+    }
+    return appInstance;
+  } catch (error) {
+    console.error("Firebase app initialization error:", error);
+    return null;
+  }
+}
+
+// Initialize Firebase Auth
+function initializeFirebaseAuth(): Auth | null {
   if (!firebaseEnabled) {
     console.error(
       "Firebase is not configured. Set VITE_FIREBASE_API_KEY (or legacy VITE_API_KEY), " +
@@ -45,12 +66,13 @@ export function getFirebaseAuth(): Auth | null {
   try {
     if (authInstance) return authInstance;
 
-    appInstance = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+    const app = initializeFirebaseApp();
+    if (!app) return null;
 
     // IndexedDB persistence can be unavailable in embedded previews and may fail
     // with "Database is closing/hidden" after Google redirects back to the app.
     // Session storage survives refreshes without relying on IndexedDB.
-    authInstance = initializeAuth(appInstance, {
+    authInstance = initializeAuth(app, {
       persistence: browserSessionPersistence,
       popupRedirectResolver: browserPopupRedirectResolver,
     });
@@ -59,8 +81,12 @@ export function getFirebaseAuth(): Auth | null {
     // Firebase may already have initialized Auth for this app during hot reload.
     // In that case, retrieve the existing instance instead of failing sign-in.
     try {
-      authInstance = getAuth(appInstance ?? undefined);
-      return authInstance;
+      const app = initializeFirebaseApp();
+      if (app) {
+        authInstance = getAuth(app);
+        return authInstance;
+      }
+      return null;
     } catch {
       console.error("Firebase initialization error:", error);
       return null;
@@ -68,7 +94,13 @@ export function getFirebaseAuth(): Auth | null {
   }
 }
 
-export function getFirebaseFirestore(): Firestore | null {
+/** Returns the configured Auth instance, or null when Firebase is unavailable. */
+export function getFirebaseAuth(): Auth | null {
+  return authInstance ?? initializeFirebaseAuth();
+}
+
+// Initialize Firestore
+function initializeFirestore(): Firestore | null {
   if (!firebaseEnabled) {
     console.warn("Firebase is not configured. Please check your environment variables.");
     return null;
@@ -77,7 +109,9 @@ export function getFirebaseFirestore(): Firestore | null {
   try {
     if (firestoreInstance) return firestoreInstance;
 
-    const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+    const app = initializeFirebaseApp();
+    if (!app) return null;
+    
     firestoreInstance = getFirestore(app);
     return firestoreInstance;
   } catch (error) {
@@ -85,3 +119,37 @@ export function getFirebaseFirestore(): Firestore | null {
     return null;
   }
 }
+
+/** Returns the configured Firestore instance, or null when Firebase is unavailable. */
+export function getFirebaseFirestore(): Firestore | null {
+  return firestoreInstance ?? initializeFirestore();
+}
+
+// Initialize all services
+const app = initializeFirebaseApp();
+const auth = initializeFirebaseAuth();
+const db = initializeFirestore();
+
+// Export initialized instances
+export { 
+  app,
+  auth,
+  db,
+  // Also export the initialization functions if needed elsewhere
+  initializeFirebaseApp,
+  initializeFirebaseAuth,
+  initializeFirestore,
+};
+
+// Default export for convenience
+export default {
+  app,
+  auth,
+  db,
+  firebaseEnabled,
+  initializeFirebaseApp,
+  initializeFirebaseAuth,
+  getFirebaseAuth,
+  initializeFirestore,
+  getFirebaseFirestore,
+};
