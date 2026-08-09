@@ -1,7 +1,7 @@
 // pages/ProjectsPage.tsx
 import { Link } from "react-router-dom";
 import { useState } from "react";
-import { Pencil, Plus, Power, AlertCircle } from "lucide-react";
+import { AlertCircle, ExternalLink, Github, Pencil, Plus, Power } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -30,19 +30,51 @@ import { projectService } from "@/services/projectService";
 import { firebaseEnabled } from "@/config/firebase";
 import type { Project } from "@/types";
 
+const projectColors = ["#2563EB", "#7C3AED", "#DB2777", "#0891B2", "#16A34A", "#D97706"];
+
+type ProjectForm = Omit<
+  Project,
+  "id" | "icon" | "status" | "tasks" | "completed" | "aiAssisted" | "color"
+>;
+
+function getProjectColor(seed: string): string {
+  let hash = 0;
+  for (const character of seed) hash = (hash * 31 + character.charCodeAt(0)) | 0;
+  return projectColors[Math.abs(hash) % projectColors.length] ?? projectColors[0]!;
+}
+
+function getGithubUrl(repository: string): string | null {
+  const value = repository.trim();
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return value;
+  if (/^github\.com\//i.test(value)) return `https://${value}`;
+  if (/^[\w.-]+\/[\w.-]+$/.test(value)) return `https://github.com/${value}`;
+  if (/^[\w.-]+$/.test(value)) return `https://github.com/${value}`;
+  return null;
+}
+
+function getRepositoryLabel(repository: string): string {
+  const url = getGithubUrl(repository);
+  if (!url) return repository;
+  try {
+    return new URL(url).pathname.replace(/^\//, "").replace(/\.git$/, "") || repository;
+  } catch {
+    return repository;
+  }
+}
+
 export default function ProjectsPage() {
   const { data: projects, isLoading, error, refetch } = useProjects();
   const [open, setOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | Project["status"]>("ALL");
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<ProjectForm>({
     name: "",
     description: "",
     githubRepository: "devflow-ai",
     jiraProject: "DEV",
     defaultBranch: "main",
-    color: "#5B8DEF",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -54,7 +86,11 @@ export default function ProjectsPage() {
 
     setIsSubmitting(true);
     try {
-      await projectService.createProject({ ...form, icon: "Rocket" });
+      await projectService.createProject({
+        ...form,
+        color: getProjectColor(form.name),
+        icon: "Rocket",
+      });
       await refetch();
       toast.success("Project created successfully.");
       setOpen(false);
@@ -64,7 +100,6 @@ export default function ProjectsPage() {
         githubRepository: "devflow-ai",
         jiraProject: "DEV",
         defaultBranch: "main",
-        color: "#5B8DEF",
       });
     } catch (error) {
       toast.error("Failed to create project. Please try again.");
@@ -82,7 +117,10 @@ export default function ProjectsPage() {
 
     setIsSubmitting(true);
     try {
-      await projectService.updateProject(editingProject.id, { ...form });
+      await projectService.updateProject(editingProject.id, {
+        ...form,
+        color: getProjectColor(form.name),
+      });
       await refetch();
       toast.success("Project updated successfully.");
       setEditingProject(null);
@@ -127,7 +165,6 @@ export default function ProjectsPage() {
       githubRepository: project.githubRepository,
       jiraProject: project.jiraProject,
       defaultBranch: project.defaultBranch,
-      color: project.color,
     });
     setEditingProject(project);
   }
@@ -174,6 +211,7 @@ export default function ProjectsPage() {
               <Input
                 value={form.githubRepository}
                 onChange={(e) => setForm({ ...form, githubRepository: e.target.value })}
+                placeholder="https://github.com/owner/repository"
               />
             </div>
             <div className="grid gap-1.5">
@@ -190,14 +228,9 @@ export default function ProjectsPage() {
                 onChange={(e) => setForm({ ...form, defaultBranch: e.target.value })}
               />
             </div>
-            <div className="grid gap-1.5">
-              <Label>Project Color</Label>
-              <Input
-                type="color"
-                value={form.color}
-                onChange={(e) => setForm({ ...form, color: e.target.value })}
-              />
-            </div>
+            <p className="col-span-2 text-xs text-muted-foreground">
+              Project color is generated automatically from its name.
+            </p>
           </div>
         </div>
         <DialogFooter>
@@ -288,10 +321,19 @@ export default function ProjectsPage() {
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {visibleProjects.map((p) => {
             const progress = p.tasks ? Math.round((p.completed / p.tasks) * 100) : 0;
+            const repositoryUrl = getGithubUrl(p.githubRepository);
+            const repositoryLabel = getRepositoryLabel(p.githubRepository);
+            const color = getProjectColor(p.name);
             return (
-              <div key={p.id} className="surface flex flex-col p-5">
+              <article
+                key={p.id}
+                className="surface flex min-w-0 flex-col rounded-xl p-5 transition-shadow hover:shadow-md"
+              >
                 <div className="flex items-center gap-2">
-                  <span className="size-2.5 rounded-full" style={{ backgroundColor: p.color }} />
+                  <span
+                    className="size-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: color }}
+                  />
                   <h2 className="truncate text-sm font-semibold">{p.name}</h2>
                   <span
                     className={
@@ -304,17 +346,29 @@ export default function ProjectsPage() {
                   </span>
                 </div>
                 <p className="mt-1.5 line-clamp-2 text-sm text-muted-foreground">{p.description}</p>
-                <div className="mt-4 flex flex-wrap gap-1.5 font-mono text-[11px] text-muted-foreground">
+                <div className="mt-4 flex flex-wrap items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
                   <span className="rounded border border-border px-1.5 py-0.5">
                     {p.jiraProject}
-                  </span>
-                  <span className="rounded border border-border px-1.5 py-0.5">
-                    {p.githubRepository}
                   </span>
                   <span className="rounded border border-border px-1.5 py-0.5">
                     {p.defaultBranch}
                   </span>
                 </div>
+                {repositoryUrl ? (
+                  <a
+                    href={repositoryUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={p.githubRepository}
+                    className="mt-3 flex w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md border border-border px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted hover:text-foreground"
+                  >
+                    <Github className="size-3.5 shrink-0" aria-hidden />
+                    <span className="truncate">{repositoryLabel}</span>
+                    <ExternalLink className="size-3 shrink-0" aria-hidden />
+                  </a>
+                ) : (
+                  <p className="mt-3 text-xs text-muted-foreground">GitHub repository not linked</p>
+                )}
                 <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
                   <div>
                     <dt className="text-[10px] tracking-wide text-muted-foreground uppercase">
@@ -361,7 +415,7 @@ export default function ProjectsPage() {
                     <Power className="size-4" />
                   </Button>
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>
@@ -395,6 +449,7 @@ export default function ProjectsPage() {
                 <Input
                   value={form.githubRepository}
                   onChange={(e) => setForm({ ...form, githubRepository: e.target.value })}
+                  placeholder="https://github.com/owner/repository"
                 />
               </div>
               <div className="grid gap-1.5">
@@ -411,14 +466,9 @@ export default function ProjectsPage() {
                   onChange={(e) => setForm({ ...form, defaultBranch: e.target.value })}
                 />
               </div>
-              <div className="grid gap-1.5">
-                <Label>Project Color</Label>
-                <Input
-                  type="color"
-                  value={form.color}
-                  onChange={(e) => setForm({ ...form, color: e.target.value })}
-                />
-              </div>
+              <p className="col-span-2 text-xs text-muted-foreground">
+                Project color is generated automatically from its name.
+              </p>
             </div>
           </div>
           <DialogFooter>
