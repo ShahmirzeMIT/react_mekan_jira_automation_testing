@@ -1,15 +1,45 @@
 import { mockJiraIssuesResponse } from "@/mock/jiraIssues";
 import type { JiraIssuesResponse, Task, TaskStatus } from "@/types";
 import { delay, mapIssueToTask } from "@/utils";
+import { apiRequest } from "@/services/apiClient";
 
-/**
- * Mock Jira transport. Replace the bodies with real HTTP calls to the backend
- * gateway — the return shapes already mirror the Jira REST API v3 response.
- */
+interface JiraOAuthStartResponse {
+  success: boolean;
+  message: string;
+  url: string;
+}
+
+export interface JiraOAuthCallbackResponse {
+  success: boolean;
+  message: string;
+  data: {
+    jiraDisplayName: string;
+    cloudId: string;
+    resources: { id: string; name: string; url: string; isDefault: boolean }[];
+  };
+}
+
 export const jiraService = {
-  async connect(_input: { url: string; workspace: string; project: string }) {
-    await delay(1200);
-    return { connected: true, project: "DEV", issues: mockJiraIssuesResponse.data.issues.length };
+  async beginOAuth(token?: string | null): Promise<string> {
+    const response = await apiRequest<JiraOAuthStartResponse>("/auth/jira", { token: token ?? null });
+    if (!response.success || !response.url) throw new Error(response.message || "Unable to start Jira OAuth.");
+
+    // Atlassian must also list this URL as an allowed OAuth callback in its app settings.
+    const authorizationUrl = new URL(response.url);
+    authorizationUrl.searchParams.set("redirect_uri", `${window.location.origin}/jira/callback`);
+    return authorizationUrl.toString();
+  },
+
+  async completeOAuthCallback(
+    code: string,
+    state?: string | null,
+    token?: string | null,
+  ): Promise<JiraOAuthCallbackResponse> {
+    const query = new URLSearchParams({ code });
+    if (state) query.set("state", state);
+    const response = await apiRequest<JiraOAuthCallbackResponse>(`/auth/jira/callback?${query}`, { token: token ?? null });
+    if (!response.success) throw new Error(response.message || "Unable to connect Jira.");
+    return response;
   },
 
   async disconnect() {

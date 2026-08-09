@@ -3,9 +3,10 @@ import {
   CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
 } from "@/components/ui/command";
 import { useAppStore } from "@/store/appStore";
+import { jiraService } from "@/services/jiraService";
 
 export function CommandPalette() {
-  const { commandOpen, setCommandOpen, signOut, connectJira, connectGithub } = useAppStore();
+  const { commandOpen, setCommandOpen, signOut, connectGithub, idToken } = useAppStore();
   const params = useParams<{ projectId?: string }>();
   const projectId = params.projectId ?? "p-1";
   const navigate = useNavigate();
@@ -29,7 +30,7 @@ export function CommandPalette() {
           <CommandItem onSelect={go("/projects", false)}>Go to Projects</CommandItem>
         </CommandGroup>
         <CommandGroup heading="Actions">
-          <CommandItem onSelect={() => { connectJira("DEV"); setCommandOpen(false); }}>Connect Jira</CommandItem>
+          <CommandItem onSelect={() => { setCommandOpen(false); void jiraService.beginOAuth(idToken).then((url) => window.location.assign(url)); }}>Connect Jira</CommandItem>
           <CommandItem onSelect={() => { connectGithub("devflow-ai"); setCommandOpen(false); }}>Connect GitHub</CommandItem>
           <CommandItem onSelect={go("/profile", false)}>Open Profile</CommandItem>
           <CommandItem onSelect={go("/settings", false)}>Open Settings</CommandItem>

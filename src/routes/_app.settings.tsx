@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { ConnectionBadge } from "@/components/common/Badges";
 import { useAppStore } from "@/store/appStore";
+import { jiraService } from "@/services/jiraService";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -17,19 +18,19 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function SettingsPage() {
   const {
     integrations,
-    connectJira,
     connectGithub,
     disconnectJira,
     disconnectGithub,
     signOut,
     theme,
     toggleTheme,
+    idToken,
   } = useAppStore();
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <PageHeader
         title="Settings"
-        description="Workspace configuration. Integrations are simulated in this MVP."
+        description="Workspace configuration. Jira uses your connected OAuth account."
       />
 
       <Section title="General">
@@ -54,8 +55,7 @@ export default function SettingsPage() {
                 size="sm"
                 variant="secondary"
                 onClick={() => {
-                  connectJira("DEV");
-                  toast.success("Jira reconnected.");
+                  void jiraService.beginOAuth(idToken).then((url) => window.location.assign(url)).catch((error: unknown) => toast.error(error instanceof Error ? error.message : "Unable to start Jira connection."));
                 }}
               >
                 Reconnect
@@ -68,8 +68,7 @@ export default function SettingsPage() {
             <Button
               size="sm"
               onClick={() => {
-                connectJira("DEV");
-                toast.success("Jira connected successfully.");
+                void jiraService.beginOAuth(idToken).then((url) => window.location.assign(url)).catch((error: unknown) => toast.error(error instanceof Error ? error.message : "Unable to start Jira connection."));
               }}
             >
               Connect Jira

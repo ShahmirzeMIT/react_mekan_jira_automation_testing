@@ -19,12 +19,11 @@ import { relativeTime, statusLabel } from "@/utils";
 import type { TaskPriority, TaskStatus } from "@/types";
 export default function TasksPage() {
   const { projectId = "p-1" } = useParams();
-  const { integrations, connectJira, logActivity } = useAppStore();
+  const { integrations, idToken, logActivity } = useAppStore();
   const { data: tasks = [], isLoading, refetch } = useTasks(projectId, integrations.jiraConnected);
   const [filters, setFilters] = useState<TaskFilters>({ search: "" });
   const [connectOpen, setConnectOpen] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [form, setForm] = useState({ url: "https://devflow.atlassian.net", workspace: "devflow", project: "DEV" });
   const [newTask, setNewTask] = useState({ title: "", description: "", priority: "MEDIUM" as TaskPriority });
   const [taskOpen, setTaskOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<(typeof tasks)[number] | null>(null);
@@ -34,12 +33,14 @@ export default function TasksPage() {
 
   async function handleConnect() {
     setConnecting(true);
-    await jiraService.connect(form);
-    connectJira(form.project);
-    logActivity("jira", `Jira workspace ${form.workspace} connected`);
-    setConnecting(false);
-    setConnectOpen(false);
-    toast.success("Jira connected successfully.");
+    try {
+      sessionStorage.setItem("devflow.jira.return-project", projectId);
+      const authorizationUrl = await jiraService.beginOAuth(idToken);
+      window.location.assign(authorizationUrl);
+    } catch (error) {
+      setConnecting(false);
+      toast.error(error instanceof Error ? error.message : "Unable to start Jira connection.");
+    }
   }
 
   const connectModal = (
@@ -47,11 +48,7 @@ export default function TasksPage() {
       <DialogTrigger asChild><Button size="sm">Connect Jira</Button></DialogTrigger>
       <DialogContent>
         <DialogHeader><DialogTitle>Connect Jira</DialogTitle></DialogHeader>
-        <div className="grid gap-3">
-          <div className="grid gap-1.5"><Label>Jira URL</Label><Input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} /></div>
-          <div className="grid gap-1.5"><Label>Workspace</Label><Input value={form.workspace} onChange={(e) => setForm({ ...form, workspace: e.target.value })} /></div>
-          <div className="grid gap-1.5"><Label>Project</Label><Input value={form.project} onChange={(e) => setForm({ ...form, project: e.target.value })} /></div>
-        </div>
+        <p className="text-sm text-muted-foreground">You will be redirected to Atlassian to authorize this workspace. After approval, DevFlow returns you to your task list.</p>
         <DialogFooter><Button onClick={handleConnect} disabled={connecting}>{connecting ? "Connecting…" : "Connect Jira"}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
