@@ -64,7 +64,7 @@ export default function SettingsPage() {
                 Disconnect
               </Button>
             </div>
-          ) : (
+          ) : integrations.jiraConnectionChecked ? (
             <Button
               size="sm"
               onClick={() => {
@@ -73,7 +73,7 @@ export default function SettingsPage() {
             >
               Connect Jira
             </Button>
-          )}
+          ) : null}
         </div>
       </Section>
 

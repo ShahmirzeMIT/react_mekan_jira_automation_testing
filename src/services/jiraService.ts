@@ -19,6 +19,12 @@ export interface JiraOAuthCallbackResponse {
   };
 }
 
+interface CanvasIssuesRequest {
+  accessToken: string;
+  cloudId: string;
+  accountId: string;
+}
+
 export const jiraService = {
   async beginOAuth(token?: string | null): Promise<string> {
     const response = await apiRequest<JiraOAuthStartResponse>("/auth/jira", { token: token ?? null });
@@ -55,6 +61,20 @@ export const jiraService = {
   async getRawIssues(): Promise<JiraIssuesResponse> {
     await delay(600);
     return mockJiraIssuesResponse;
+  },
+
+  async getCanvasIssues({ accessToken, cloudId, accountId }: CanvasIssuesRequest): Promise<JiraIssuesResponse> {
+    return apiRequest<JiraIssuesResponse>("/canvas/jira/issues", {
+      method: "POST",
+      token: accessToken,
+      body: JSON.stringify({ cloudId, accountId }),
+    });
+  },
+
+  async getCanvasTasks(projectId: string, request: CanvasIssuesRequest): Promise<Task[]> {
+    const response = await jiraService.getCanvasIssues(request);
+    if (!response.success || !response.data?.success) throw new Error(response.message || "Unable to load Jira issues.");
+    return (response.data.issues ?? []).map((issue) => mapIssueToTask(issue, projectId));
   },
 
   async getTasks(projectId: string): Promise<Task[]> {

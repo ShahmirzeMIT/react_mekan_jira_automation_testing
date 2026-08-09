@@ -29,7 +29,9 @@ export default function OverviewPage() {
         badge={<ConnectionBadge label={project?.status ?? "Active"} connected />}
         actions={<>
           <Button size="sm" asChild><Link to={`/projects/${projectId}/tasks`}>+ New Task</Link></Button>
-          <Button size="sm" variant="secondary" asChild><Link to={`/projects/${projectId}/tasks`}>Connect Jira</Link></Button>
+          {integrations.jiraConnectionChecked && !integrations.jiraConnected && (
+            <Button size="sm" variant="secondary" asChild><Link to={`/projects/${projectId}/tasks`}>Connect Jira</Link></Button>
+          )}
           <Button size="sm" variant="secondary" asChild><Link to={`/projects/${projectId}/github`}>Connect GitHub</Link></Button>
         </>}
       />

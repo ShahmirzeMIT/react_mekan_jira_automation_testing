@@ -9,7 +9,9 @@ import {
   type ReactNode,
 } from "react";
 import { onIdTokenChanged, type User as FirebaseUser } from "firebase/auth";
+import { collection, getDocs } from "firebase/firestore";
 import { getFirebaseAuth } from "@/config/firebase";
+import { db } from "@/config/firebase";
 import { authService } from "@/services/authService";
 import { mockActivities } from "@/mock/activities";
 import type {
@@ -24,6 +26,8 @@ import type {
 
 interface IntegrationState {
   jiraConnected: boolean;
+  /** True after the signed-in user's Jira connection has been checked in Firestore. */
+  jiraConnectionChecked: boolean;
   githubConnected: boolean;
   jiraProject: string | null;
   githubRepository: string | null;
@@ -46,6 +50,31 @@ interface AIWorkspaceState {
 type Theme = "light" | "dark";
 const THEME_STORAGE_KEY = "devflow.theme";
 const SIDEBAR_STORAGE_KEY = "devflow.sidebar-collapsed";
+
+type JiraConnection = {
+  jiraProject: string | null;
+  jiraLastSync: string | null;
+};
+
+async function findJiraConnection(email: string): Promise<JiraConnection | null> {
+  if (!db) return null;
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const snapshot = await getDocs(collection(db, "jira_users"));
+  const document = snapshot.docs.find((item) => {
+    const data = item.data();
+    const jiraEmail = data["jiraUserEmail"];
+    return typeof jiraEmail === "string" && jiraEmail.trim().toLowerCase() === normalizedEmail;
+  });
+
+  if (!document) return null;
+
+  const data = document.data();
+  return {
+    jiraProject: typeof data["jiraDisplayName"] === "string" ? data["jiraDisplayName"] : null,
+    jiraLastSync: typeof data["lastSyncAt"] === "string" ? data["lastSyncAt"] : null,
+  };
+}
 
 function getStoredTheme(): Theme {
   if (typeof window === "undefined") return "dark";
@@ -126,6 +155,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [activities, setActivities] = useState<ActivityEvent[]>(mockActivities);
   const [integrations, setIntegrations] = useState<IntegrationState>({
     jiraConnected: false,
+    jiraConnectionChecked: false,
     githubConnected: false,
     jiraProject: null,
     githubRepository: null,
@@ -158,6 +188,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       if (!auth) {
         setUser(null);
         setIdToken(null);
+        setIntegrations((current) => ({ ...current, jiraConnected: false, jiraConnectionChecked: true }));
         setLoading(false);
         return;
       }
@@ -170,6 +201,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           if (isMounted) {
             setUser(null);
             setIdToken(null);
+            setIntegrations((current) => ({ ...current, jiraConnected: false, jiraConnectionChecked: true }));
             setLoading(false);
           }
           return;
@@ -180,8 +212,25 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           const token = await firebaseUser.getIdToken();
           if (!isMounted) return;
 
-          setUser(authService.getCurrentUser());
+          const appUser = authService.getCurrentUser();
+          setUser(appUser);
           setIdToken(token);
+
+          const jiraConnection = appUser?.email
+            ? await findJiraConnection(appUser.email).catch((error: unknown) => {
+                console.error("Unable to read Jira connection:", error);
+                return null;
+              })
+            : null;
+          if (!isMounted) return;
+
+          setIntegrations((current) => ({
+            ...current,
+            jiraConnected: Boolean(jiraConnection),
+            jiraConnectionChecked: true,
+            jiraProject: jiraConnection?.jiraProject ?? null,
+            jiraLastSync: jiraConnection?.jiraLastSync ?? null,
+          }));
           setLoading(false);
 
           // ID tokens normally last one hour; renew early while the app remains open.
@@ -198,6 +247,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           if (isMounted) {
             setUser(null);
             setIdToken(null);
+            setIntegrations((current) => ({ ...current, jiraConnected: false, jiraConnectionChecked: true }));
             setLoading(false);
           }
         }
@@ -267,6 +317,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         } finally {
           setIntegrations({
             jiraConnected: false,
+            jiraConnectionChecked: false,
             githubConnected: false,
             jiraProject: null,
             githubRepository: null,
