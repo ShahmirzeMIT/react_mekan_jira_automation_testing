@@ -8,6 +8,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { onIdTokenChanged, type User as FirebaseUser } from "firebase/auth";
+import { getFirebaseAuth } from "@/config/firebase";
 import { authService } from "@/services/authService";
 import { mockActivities } from "@/mock/activities";
 import type {
@@ -58,6 +60,8 @@ function getStoredSidebarState(): boolean {
 interface AppStore {
   // auth
   user: AuthUser | null;
+  /** The Firebase ID token for authenticated API requests. Kept in memory only. */
+  idToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   signIn: () => Promise<void>;
@@ -114,6 +118,7 @@ const initialAI: AIWorkspaceState = {
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [idToken, setIdToken] = useState<string | null>(null);
   const [isLoading, setLoading] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(getStoredSidebarState);
   const [theme, setTheme] = useState<Theme>(getStoredTheme);
@@ -130,11 +135,82 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [ai, setAI] = useState<AIWorkspaceState>(initialAI);
 
   useEffect(() => {
-    const unsubscribe = authService.onAuthStateChanged((next) => {
-      setUser(next);
-      setLoading(false);
-    });
-    return unsubscribe;
+    let refreshInterval: ReturnType<typeof setInterval> | undefined;
+    let unsubscribe = () => {};
+    let isMounted = true;
+
+    const clearRefreshInterval = () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = undefined;
+      }
+    };
+
+    const refreshToken = async (firebaseUser: FirebaseUser): Promise<string> => {
+      // `true` forces Firebase to obtain a new ID token instead of returning a cached one.
+      const token = await firebaseUser.getIdToken(true);
+      if (isMounted) setIdToken(token);
+      return token;
+    };
+
+    const initializeAuth = () => {
+      const auth = getFirebaseAuth();
+      if (!auth) {
+        setUser(null);
+        setIdToken(null);
+        setLoading(false);
+        return;
+      }
+
+      // Unlike onAuthStateChanged, this also runs whenever Firebase refreshes an ID token.
+      unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
+        clearRefreshInterval();
+
+        if (!firebaseUser) {
+          if (isMounted) {
+            setUser(null);
+            setIdToken(null);
+            setLoading(false);
+          }
+          return;
+        }
+
+        try {
+          // No force refresh is necessary on initial load: Firebase refreshes expired tokens itself.
+          const token = await firebaseUser.getIdToken();
+          if (!isMounted) return;
+
+          setUser(authService.getCurrentUser());
+          setIdToken(token);
+          setLoading(false);
+
+          // ID tokens normally last one hour; renew early while the app remains open.
+          refreshInterval = setInterval(
+            () => {
+              void refreshToken(firebaseUser).catch((error) => {
+                console.error("Firebase token refresh failed:", error);
+              });
+            },
+            50 * 60 * 1000,
+          );
+        } catch (error) {
+          console.error("Firebase token initialization failed:", error);
+          if (isMounted) {
+            setUser(null);
+            setIdToken(null);
+            setLoading(false);
+          }
+        }
+      });
+    };
+
+    initializeAuth();
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+      clearRefreshInterval();
+    };
   }, []);
 
   useEffect(() => {
@@ -166,6 +242,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AppStore>(
     () => ({
       user,
+      idToken,
       isAuthenticated: Boolean(user),
       isLoading,
       signIn: async () => {
@@ -183,6 +260,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         try {
           await authService.signOut();
           setUser(null);
+          setIdToken(null);
         } catch (error) {
           console.error("Sign out failed:", error);
           throw error;
@@ -264,6 +342,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     }),
     [
       user,
+      idToken,
       isLoading,
       sidebarCollapsed,
       theme,
