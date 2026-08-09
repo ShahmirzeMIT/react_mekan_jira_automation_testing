@@ -15,6 +15,7 @@ import SettingsPage from "@/routes/_app.settings";
 import Index from "@/routes/index";
 import LoginPage from "@/routes/login";
 import JiraCallbackPage from "@/routes/jira-callback";
+import AcceptGithubPage from "@/routes/_app.accept.github";
 
 function NotFound() {
   return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">Page not found.</div>;
@@ -27,6 +28,7 @@ export function App() {
         <Route path="/" element={<Index />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/jira/callback" element={<JiraCallbackPage />} />
+        <Route path="/accept-github" element={<AcceptGithubPage />} />
         <Route element={<AppLayout />}>
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/projects/:projectId/overview" element={<OverviewPage />} />

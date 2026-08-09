@@ -1,8 +1,39 @@
 import { mockFiles, mockFileTree } from "@/mock/files";
 import { mockCommits, mockPullRequests, mockRepositories } from "@/mock/repositories";
 import { delay } from "@/utils";
+import { apiRequest } from "@/services/apiClient";
+
+interface GithubLoginResponse {
+  success?: boolean;
+  message?: string;
+  authUrl: string;
+}
+
+interface GithubCallbackResponse {
+  success?: boolean;
+  message?: string;
+  data?: { login?: string; username?: string };
+}
 
 export const githubService = {
+  async beginOAuth(userID: string): Promise<string> {
+    const response = await apiRequest<GithubLoginResponse>("/github/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ userId: userID }),
+    });
+    if (!response.authUrl) throw new Error(response.message || "GitHub authorization URL was not returned.");
+    return response.authUrl;
+  },
+
+  async completeOAuthCallback(input: { code: string; state?: string | null; userId: string }): Promise<GithubCallbackResponse> {
+    const response = await apiRequest<GithubCallbackResponse>("/github/auth/callback", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    if (response.success === false) throw new Error(response.message || "Unable to connect GitHub.");
+    return response;
+  },
+
   async connect(account: string) {
     await delay(1100);
     return { connected: true, account, repositories: mockRepositories.length };
