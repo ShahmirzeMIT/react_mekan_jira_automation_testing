@@ -6,7 +6,11 @@ import { Send } from "lucide-react";
 
 import { SelectedFilesMenu } from "@/components/ai-workspace/SelectedFilesMenu";
 import GithubFiles, { GithubFilesHandle, SelectedGithubFile } from "@/components/ai-workspace/GithubFiles";
-
+import { AIResultDrawer } from "@/components/ai-workspace/AIResultDrawer";
+import { useGemini } from "@/hooks/useGemini";
+import { parseGeminiResponse } from "@/lib/parseGeminiResponse";
+import { guessLanguageFromPath } from "@/lib/fileLanguage";
+import { GeminiTaskResult } from "@/types/gemini";
 
 interface JiraIssue {
   id: string;
@@ -24,15 +28,12 @@ interface JiraIssue {
   };
 }
 
-// Demo data shaped exactly like the real Jira REST response, so the page
-// renders meaningfully before it's wired to a live fetch. Swap this for
-// your actual Jira hook (e.g. useJiraIssues()) once that's available.
 const DEMO_ISSUES: JiraIssue[] = [
   {
     id: "10007",
     key: "SCRUM-8",
     fields: {
-      summary: "burada yenilik elemek lazimdir bekar durmaq olmaz ucuncudur",
+      summary: "Contact Pagede butun dili ingilisce et ve  forma yeni fieldsler elave et ve butun fieldsleri validate et",
       issuetype: {
         name: "Story",
         iconUrl:
@@ -74,8 +75,6 @@ const DEMO_ISSUES: JiraIssue[] = [
   },
 ];
 
-// Jira's statusCategory.colorName is one of a small fixed set. Map each to
-// a rail/pill treatment so status reads at a glance without needing labels.
 const STATUS_STYLES: Record<string, { rail: string; dot: string; pill: string }> = {
   green: { rail: "bg-emerald-500", dot: "bg-emerald-500", pill: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
   yellow: { rail: "bg-amber-500", dot: "bg-amber-500", pill: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
@@ -104,41 +103,62 @@ export default function AIWorkspacePage() {
     [],
   );
 
-  // Single-select: at most one issue key, never an array.
+  const { askGemini } = useGemini();
+
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [sending, setSending] = useState(false);
 
-  // GitHub tree-də checkbox ilə seçilmiş fayllar (path + content). GithubFiles
-  // bunları özü doldurur (fetch edir), biz sadəcə göstərmək/silmək üçün saxlayırıq.
   const [selectedGithubFiles, setSelectedGithubFiles] = useState<SelectedGithubFile[]>([]);
   const githubFilesRef = useRef<GithubFilesHandle>(null);
 
+  // AI nəticəsi üçün drawer state-i
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [aiResult, setAiResult] = useState<GeminiTaskResult | null>(null);
+  const [aiRawFallback, setAiRawFallback] = useState<string | null>(null);
+
   const selected = useMemo(() => issues.find((i) => i.key === selectedKey) ?? null, [issues, selectedKey]);
 
-  // Menyudakı "X" düyməsi buraya gəlir - GithubFiles-ın öz state-ini (ref
-  // vasitəsilə) dəyişirik ki, tree-dəki checkbox da avtomatik "unchecked" olsun.
   const handleRemoveGithubFile = (path: string) => {
     githubFilesRef.current?.removeSelectedFile(path);
   };
 
   async function handleDispatch() {
     if (!selected) return;
+
+    const readyFiles = selectedGithubFiles.filter((f) => !f.loading);
+    if (readyFiles.length === 0) {
+      toast.error("Zəhmət olmasa ən azı bir GitHub faylı seçin.");
+      return;
+    }
+
     setSending(true);
+    setAiResult(null);
+    setAiRawFallback(null);
+
     try {
-      const payload = {
-        key: selected.key,
-        summary: selected.fields.summary,
-        notes: notes.trim() || undefined,
-        // Seçilmiş GitHub fayllarının path+content-i - hələ yüklənməkdə olanlar süzülür
-        githubFiles: selectedGithubFiles
-          .filter((f) => !f.loading)
-          .map(({ path, content }) => ({ path, content })),
-      };
-      // TODO: replace with the real API call.
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      console.log("Dispatched to AI:", payload);
-      toast.success(`Sent ${selected.key} to AI.`);
+      const jiraTask = [selected.fields.summary, notes.trim() ? `Notes: ${notes.trim()}` : ""]
+        .filter(Boolean)
+        .join("\n\n");
+
+      const filesForAI = readyFiles.map(({ path, content }) => ({
+        path,
+        content,
+        language: guessLanguageFromPath(path),
+      }));
+
+      const rawText = await askGemini(jiraTask, filesForAI);
+      const parsed = parseGeminiResponse(rawText);
+
+      if (parsed) {
+        setAiResult(parsed);
+      } else {
+        // JSON parse alınmadı - xam mətni fallback kimi saxlayırıq ki, itməsin.
+        setAiRawFallback(rawText);
+      }
+      setDrawerOpen(true);
+
+      toast.success(`AI cavabı hazırdır: ${selected.key}`);
     } catch (err) {
       toast.error("Could not send this task. Please try again.");
       console.error(err);
@@ -148,8 +168,6 @@ export default function AIWorkspacePage() {
   }
 
   return (
-    // overflow-hidden here is what stops an oversized child from ever
-    // forcing the *whole page* to scroll — each pane scrolls on its own.
     <div className="h-screen overflow-hidden bg-background p-4">
       <div className="mx-auto flex h-full max-w-7xl gap-4">
         {/* Queue — pick exactly one issue */}
@@ -182,7 +200,6 @@ export default function AIWorkspacePage() {
                         : "border-border/60 hover:border-border hover:bg-muted/40")
                     }
                   >
-                    {/* status rail */}
                     <span className={`absolute left-0 top-0 h-full w-1 ${style.rail}`} aria-hidden />
 
                     <img
@@ -249,14 +266,18 @@ export default function AIWorkspacePage() {
             </div>
           </div>
 
-          {/* min-h-0 is required on every level of this chain (section, this
-              div) or a flex child's default min-height:auto lets GithubFiles
-              grow past its box and drags the whole page into scroll. */}
           <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-border/60">
             <GithubFiles ref={githubFilesRef} onSelectedFilesChange={setSelectedGithubFiles} />
           </div>
         </section>
       </div>
+
+      <AIResultDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        result={aiResult}
+        rawFallback={aiRawFallback}
+      />
     </div>
   );
 }
