@@ -33,7 +33,7 @@ const DEMO_ISSUES: JiraIssue[] = [
     id: "10007",
     key: "SCRUM-8",
     fields: {
-      summary: "Contact Pagede butun dili ingilisce et ve  forma yeni fieldsler elave et ve butun fieldsleri validate et",
+      summary: "Update the Contact page by converting all user-facing text to English and improving the contact form. Add Full Name, Email, Phone Number, Company, Subject, and Message fields. Make Full Name, Email, Phone Number, Subject, and Message required, while Company should remain optional. Add proper validation for every field, including email format, phone number format, minimum character requirements, and maximum character limits where appropriate. Display clear English validation messages for invalid fields and make sure errors disappear when the user corrects the input. Prevent form submission when validation fails, show a loading state while submitting, and disable the submit button during submission. Preserve the existing form submission functionality, styling, responsive behavior, and project architecture. Reuse existing shared form components, validation utilities, hooks, and UI components where possible, and avoid modifying unrelated files or functionality. Ensure the final implementation is fully typed, accessible, and does not introduce any TypeScript, import, or runtime errors.",
       issuetype: {
         name: "Story",
         iconUrl:
@@ -252,9 +252,14 @@ export default function AIWorkspacePage() {
           <div className="mb-2.5 flex shrink-0 items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Loaded issue</p>
-              <p className="truncate text-sm font-medium">
-                {selected ? `${selected.key} — ${selected.fields.summary}` : "Nothing selected yet"}
-              </p>
+<p className="truncate text-sm font-medium">
+  {selected
+    ? (() => {
+        const text = `${selected.key} — ${selected.fields.summary}`;
+        return text.length > 100 ? `${text.slice(0, 100)}...` : text;
+      })()
+    : "Nothing selected yet"}
+</p>
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
