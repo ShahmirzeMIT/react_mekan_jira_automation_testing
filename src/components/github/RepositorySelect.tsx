@@ -40,9 +40,12 @@ export const RepositorySelect = ({
         className="w-full"
         size="large"
         showSearch
-        optionFilterProp="children"
+        // Search against repo.full_name (the Option's `value`), not the
+        // rendered `children` — children here is a JSX tree (icons/tags),
+        // not a string, so the old cast to string never matched anything.
+        optionFilterProp="value"
         filterOption={(input, option) =>
-          (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+          (option?.value as string)?.toLowerCase().includes(input.toLowerCase())
         }
         notFoundContent={loading ? <Spin size="small" /> : 'No repositories found'}
       >
