@@ -1,6 +1,6 @@
 // LoginPage.tsx
 import { useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Bot, CheckCircle2, Code2, GitBranch, ListChecks, TestTube2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -17,9 +17,17 @@ const steps = [
 ];
 
 export default function LoginPage() {
-  const { signIn, isAuthenticated, isLoading } = useAppStore();
+  const { signIn, isAuthenticated, isLoading, redirectError } = useAppStore();
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
@@ -27,19 +35,32 @@ export default function LoginPage() {
     }
   }, [isLoading, isAuthenticated, navigate]);
 
+  // Surfaces any error that happened during the redirect round-trip
+  // (e.g. the user closed/cancelled the Google account chooser).
+  useEffect(() => {
+    if (redirectError) {
+      toast.error("Google sign-in failed. Please try again.");
+      console.error("Sign-in error:", redirectError);
+    }
+  }, [redirectError]);
+
   if (isLoading) return <FullScreenLoader label="Checking your session" />;
 
   async function handleGoogle() {
     setBusy(true);
     try {
+      // signIn() now triggers signInWithRedirect — the page fully navigates
+      // away to Google and back, so nothing after this line will run in
+      // this component instance on success. We only reach the catch/finally
+      // below if kicking off the redirect itself fails (e.g. offline).
       await signIn();
-      toast.success("Signed in successfully.");
-      navigate("/projects", { replace: true });
     } catch (error) {
       console.error("Sign-in error:", error);
-      toast.error("Google sign-in failed. Please try again.");
+      if (mountedRef.current) {
+        toast.error("Google sign-in failed. Please try again.");
+      }
     } finally {
-      setBusy(false);
+      if (mountedRef.current) setBusy(false);
     }
   }
 
@@ -86,10 +107,10 @@ export default function LoginPage() {
           <h2 className="text-lg font-semibold tracking-tight">Welcome to DevFlow AI</h2>
           <p className="mt-1.5 text-sm text-muted-foreground">Sign in to continue to your workspace.</p>
 
-          <Button 
-            className="mt-8 w-full" 
-            size="lg" 
-            onClick={handleGoogle} 
+          <Button
+            className="mt-8 w-full"
+            size="lg"
+            onClick={handleGoogle}
             disabled={busy}
           >
             <svg viewBox="0 0 24 24" className="size-4" aria-hidden>
@@ -98,7 +119,7 @@ export default function LoginPage() {
                 d="M12 10.2v3.9h5.5c-.24 1.4-1.7 4.1-5.5 4.1-3.3 0-6-2.7-6-6.1s2.7-6.1 6-6.1c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.7 3.4 14.6 2.5 12 2.5 6.9 2.5 2.8 6.6 2.8 11.9S6.9 21.3 12 21.3c5.9 0 9.8-4.1 9.8-9.9 0-.7-.1-1.1-.2-1.6H12z"
               />
             </svg>
-            {busy ? "Signing in…" : "Continue with Google"}
+            {busy ? "Redirecting…" : "Continue with Google"}
           </Button>
 
           <p className="mt-6 text-center text-xs text-muted-foreground">

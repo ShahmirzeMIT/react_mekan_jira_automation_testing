@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { onIdTokenChanged, type User as FirebaseUser } from "firebase/auth";
+import { getRedirectResult, onIdTokenChanged, type User as FirebaseUser } from "firebase/auth";
 import { collection, getDocs } from "firebase/firestore";
 import { getFirebaseAuth } from "@/config/firebase";
 import { db } from "@/config/firebase";
@@ -95,6 +95,8 @@ interface AppStore {
   isLoading: boolean;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
+  /** Set if the redirect-based Google sign-in round-trip came back with an error. */
+  redirectError: unknown;
   // ui
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
@@ -149,6 +151,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [idToken, setIdToken] = useState<string | null>(null);
   const [isLoading, setLoading] = useState(true);
+  const [redirectError, setRedirectError] = useState<unknown>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(getStoredSidebarState);
   const [theme, setTheme] = useState<Theme>(getStoredTheme);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -193,6 +196,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // Catch the result of a signInWithRedirect() round-trip. This resolves
+      // to null on a normal page load with no pending redirect, and to the
+      // signed-in user right after Google sends the browser back here. Any
+      // error here (e.g. the user cancelled the Google account chooser)
+      // would otherwise be silently lost, since nothing is awaiting the
+      // original signInWithRedirect() call across the navigation.
+      getRedirectResult(auth).catch((error: unknown) => {
+        if (isMounted) setRedirectError(error);
+      });
+
       // Unlike onAuthStateChanged, this also runs whenever Firebase refreshes an ID token.
       unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
         clearRefreshInterval();
@@ -215,6 +228,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           const appUser = authService.getCurrentUser();
           setUser(appUser);
           setIdToken(token);
+          setRedirectError(null);
 
           const jiraConnection = appUser?.email
             ? await findJiraConnection(appUser.email).catch((error: unknown) => {
@@ -295,15 +309,25 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       idToken,
       isAuthenticated: Boolean(user),
       isLoading,
+      redirectError,
       signIn: async () => {
+        // authService.signInWithGoogle() should call Firebase's
+        // signInWithRedirect(auth, provider) — NOT signInWithPopup. Popup
+        // auth relies on a live window.opener link back to this page, which
+        // a strict Cross-Origin-Opener-Policy: same-origin header (required
+        // elsewhere in this app for WebContainer/SharedArrayBuffer support)
+        // severs, surfacing as auth/popup-closed-by-user. Redirect performs
+        // a full navigation instead, so it isn't affected by COOP at all.
+        //
+        // Because this is a redirect, this call resolves once the browser
+        // *starts* navigating to Google — it does not resolve with the
+        // signed-in user. The actual result is picked up above by
+        // getRedirectResult()/onIdTokenChanged() after the browser returns.
         try {
-          const next = await authService.signInWithGoogle();
-          setUser(next);
+          await authService.signInWithGoogle();
         } catch (error) {
           console.error("Sign in failed:", error);
           throw error;
-        } finally {
-          setLoading(false);
         }
       },
       signOut: async () => {
@@ -395,6 +419,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       user,
       idToken,
       isLoading,
+      redirectError,
       sidebarCollapsed,
       theme,
       commandOpen,
