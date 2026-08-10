@@ -35,9 +35,12 @@ export const BranchesDisplay = ({
         className="w-full"
         size="large"
         showSearch
-        optionFilterProp="children"
+        // Search against branch.name (the Option's `value`), not the
+        // rendered `children` — children is a JSX <Space> tree (with a
+        // <Tag> inside), not a string, so the old cast never matched.
+        optionFilterProp="value"
         filterOption={(input, option) =>
-          (option?.children as string)?.toLowerCase().includes(input.toLowerCase())
+          (option?.value as string)?.toLowerCase().includes(input.toLowerCase())
         }
         notFoundContent={loading ? <Spin size="small" /> : 'No branches found'}
       >
