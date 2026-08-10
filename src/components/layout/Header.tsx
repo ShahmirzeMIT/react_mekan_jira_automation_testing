@@ -1,5 +1,5 @@
 import { Link, useLocation, useParams } from "react-router-dom";
-import { Bell, Info, Search } from "lucide-react";
+import { Bell, Info, Menu, Moon, Search, Sun } from "lucide-react";
 import { useAppStore } from "@/store/appStore";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -18,7 +18,16 @@ const titles: Record<string, string> = {
 };
 
 export function Header() {
-  const { integrations, setCommandOpen, ai, user } = useAppStore();
+  const {
+    integrations,
+    setCommandOpen,
+    ai,
+    user,
+    sidebarCollapsed,
+    theme,
+    toggleSidebar,
+    toggleTheme,
+  } = useAppStore();
   const { pathname } = useLocation();
   const params = useParams<{ projectId?: string; taskId?: string }>();
   const segments = pathname.split("/").filter(Boolean);
@@ -28,6 +37,16 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background/85 px-4 backdrop-blur">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={toggleSidebar}
+        aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        className="hidden md:inline-flex"
+      >
+        <Menu className="size-4" />
+      </Button>
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold">{title}</p>
         <p className="truncate font-mono text-[11px] text-muted-foreground">
@@ -69,8 +88,26 @@ export function Header() {
           <span className="absolute top-2 right-2 size-1.5 rounded-full bg-primary" />
         </Button>
 
-        <Link to="/profile" aria-label="Profile" className="flex size-8 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-xs font-semibold">
-          {user?.avatar ? <img src={user.avatar} alt="" className="size-8 object-cover" /> : (user?.name ?? "D").charAt(0)}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleTheme}
+          aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+        >
+          {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+        </Button>
+
+        <Link
+          to="/profile"
+          aria-label="Profile"
+          className="flex size-8 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-xs font-semibold"
+        >
+          {user?.avatar ? (
+            <img src={user.avatar} alt="" className="size-8 object-cover" />
+          ) : (
+            (user?.name ?? "D").charAt(0)
+          )}
         </Link>
       </div>
     </header>
