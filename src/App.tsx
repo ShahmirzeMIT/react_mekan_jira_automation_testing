@@ -34,7 +34,6 @@ export function App() {
           <Route path="/projects/:projectId/overview" element={<OverviewPage />} />
           <Route path="/projects/:projectId/tasks" element={<TasksPage />} />
           <Route path="/projects/:projectId/tasks/:taskId" element={<TaskDetailsPage />} />
-          <Route path="/projects/:projectId/relate-task" element={<RelateTaskPage />} />
           <Route path="/projects/:projectId/ai-workspace" element={<AIWorkspacePage />} />
           <Route path="/projects/:projectId/github" element={<GithubPage />} />
           <Route path="/projects/:projectId/activity" element={<ActivityPage />} />

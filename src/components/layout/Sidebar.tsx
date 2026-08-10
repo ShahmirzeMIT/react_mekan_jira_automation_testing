@@ -45,7 +45,7 @@ export function Sidebar() {
       title: "Development",
       items: [
         { label: "Tasks", icon: ListChecks, to: `/projects/${projectId}/tasks` },
-        { label: "Relate Task", icon: Link2, to: `/projects/${projectId}/relate-task` },
+        
         { label: "AI Workspace", icon: Sparkles, to: `/projects/${projectId}/ai-workspace` },
         { label: "GitHub", icon: Github, to: `/projects/${projectId}/github` },
       ],
