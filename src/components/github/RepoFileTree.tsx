@@ -10,7 +10,7 @@ import {
   FileDirectoryOpenFillIcon,
   FileIcon,
 } from "@primer/octicons-react";
-import { Image as ImageIcon, FileText as FileTextIcon } from "lucide-react";
+import { Image as ImageIcon, FileText as FileTextIcon, Check } from "lucide-react";
 
 // Əgər layihənizdə "@/lib/utils" içində cn() varsa, aşağıdakı importu açın və
 // yerli cn() funksiyasını silin:
@@ -36,8 +36,12 @@ export interface TreeNode {
 
 interface RepoFileTreeProps {
   files: RepoFileEntry[];
+  /** Hazırda ortada "preview" olunan tək fayl */
   selectedPath?: string;
   onSelectFile: (path: string) => void;
+  /** AI-a göndərmək üçün seçilmiş (çox sayda ola bilən) fayllar */
+  selectedFilePaths?: Set<string>;
+  onToggleSelect?: (path: string) => void;
   className?: string;
 }
 
@@ -85,8 +89,7 @@ function buildTree(files: RepoFileEntry[]): TreeNode[] {
   return root;
 }
 
-// Uzantıya görə VS Code üslubunda rəngli badge-lər (dil loqoları əvəzinə
-// hərf/işarə + brend rəngi — trademark loqo istifadə etmədən eyni effekti verir)
+// Uzantıya görə VS Code üslubunda rəngli badge-lər
 const EXTENSION_BADGES: Record<string, { label: string; bg: string; color?: string }> = {
   ts: { label: "TS", bg: "#3178c6" },
   tsx: { label: "TSX", bg: "#3178c6" },
@@ -121,12 +124,9 @@ const EXTENSION_BADGES: Record<string, { label: string; bg: string; color?: stri
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "bmp", "avif"]);
 
-// GitHub öz fayl ağacında bütün fayllar üçün eyni boz FileIcon istifadə edir,
-// amma daha rahat oxumaq üçün burada uzantıya görə fərqli, rəngli ikon veririk.
 function FileTypeIcon({ name }: { name: string }) {
   const lower = name.toLowerCase();
 
-  // Xüsusi fayl adları (uzantısız)
   if (lower === "readme.md" || lower === "readme") {
     return <FileTextIcon size={16} className="shrink-0 text-blue-400" />;
   }
@@ -153,11 +153,36 @@ function FileTypeIcon({ name }: { name: string }) {
     );
   }
 
-  // Tanınmayan uzantılar üçün GitHub-un standart boz FileIcon-u
   return (
     <span className="shrink-0 text-muted-foreground/80 flex items-center">
       <FileIcon size={16} />
     </span>
+  );
+}
+
+// AI-a göndərmək üçün faylı seç/sil edən checkbox.
+// e.stopPropagation() + e.preventDefault() ikisi də var ki, klik heç bir
+// halda yuxarıdakı row-un onClick-inə ötürülməsin VƏ əksinə - checkbox-a
+// klikləmək faylı yanlışlıqla preview-a da açmasın.
+function SelectCheckbox({ checked, onToggle }: { checked: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        onToggle();
+      }}
+      aria-label={checked ? "Seçimi ləğv et" : "AI üçün seç"}
+      className={cn(
+        "shrink-0 flex items-center justify-center w-3.5 h-3.5 rounded-[3px] border transition-colors",
+        checked
+          ? "bg-primary border-primary"
+          : "border-muted-foreground/40 hover:border-muted-foreground bg-transparent"
+      )}
+    >
+      {checked && <Check className="h-2.5 w-2.5 text-primary-foreground" strokeWidth={3.5} />}
+    </button>
   );
 }
 
@@ -166,6 +191,8 @@ function TreeItem({
   depth,
   selectedPath,
   onSelectFile,
+  selectedFilePaths,
+  onToggleSelect,
   expanded,
   toggleExpand,
 }: {
@@ -173,17 +200,29 @@ function TreeItem({
   depth: number;
   selectedPath?: string;
   onSelectFile: (path: string) => void;
+  selectedFilePaths?: Set<string>;
+  onToggleSelect?: (path: string) => void;
   expanded: Set<string>;
   toggleExpand: (path: string) => void;
 }) {
   const isFolder = node.type === "folder";
   const isOpen = expanded.has(node.path);
-  const isSelected = selectedPath === node.path;
+  const isPreviewed = selectedPath === node.path;
+  const isChecked = !!selectedFilePaths?.has(node.path);
 
-  const handleClick = () => {
+  // DİQQƏT: bu funksiya HƏR klikdə (checkbox-dan başqa) işə düşməlidir.
+  // Konsoldan yoxlamaq üçün log qoyuldu - fayl adına kliklədikdə bu sətri
+  // görmürsünüzsə, problem RepoFileTree-də deyil, klik ümumiyyətlə buraya
+  // çatmır (məs. üstündə başqa bir görünməz element var) deməkdir.
+  const handleRowClick = () => {
+    console.log("🖱️ TreeItem klikləndi:", node.path, "isFolder:", isFolder);
     if (isFolder) {
       toggleExpand(node.path);
     } else {
+      if (typeof onSelectFile !== "function") {
+        console.error("⚠️ onSelectFile prop RepoFileTree-ə ötürülməyib!");
+        return;
+      }
       onSelectFile(node.path);
     }
   };
@@ -191,12 +230,13 @@ function TreeItem({
   return (
     <div>
       <div
-        onClick={handleClick}
+        onClick={handleRowClick}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
         className={cn(
           "flex items-center gap-1.5 py-[3px] pr-2 text-[13px] leading-5 cursor-pointer select-none",
           "hover:bg-muted/60 transition-colors",
-          isSelected && "bg-muted font-medium"
+          isPreviewed && "bg-muted font-medium",
+          isChecked && !isPreviewed && "bg-primary/[0.07]"
         )}
       >
         {isFolder ? (
@@ -211,10 +251,17 @@ function TreeItem({
         ) : (
           <>
             <span className="w-4" />
+            {onToggleSelect && (
+              <SelectCheckbox checked={isChecked} onToggle={() => onToggleSelect(node.path)} />
+            )}
             <FileTypeIcon name={node.name} />
           </>
         )}
-        <span className="truncate">{node.name}</span>
+        {/* pointer-events-none: bu span heç vaxt öz klikini "udmasın",
+            hər zaman valideyn div-in onClick-inə ötürsün */}
+        <span className={cn("truncate pointer-events-none", isChecked && "text-primary")}>
+          {node.name}
+        </span>
       </div>
 
       {isFolder && isOpen && node.children && (
@@ -226,6 +273,8 @@ function TreeItem({
               depth={depth + 1}
               selectedPath={selectedPath}
               onSelectFile={onSelectFile}
+              selectedFilePaths={selectedFilePaths}
+              onToggleSelect={onToggleSelect}
               expanded={expanded}
               toggleExpand={toggleExpand}
             />
@@ -236,10 +285,16 @@ function TreeItem({
   );
 }
 
-export function RepoFileTree({ files, selectedPath, onSelectFile, className }: RepoFileTreeProps) {
+export function RepoFileTree({
+  files,
+  selectedPath,
+  onSelectFile,
+  selectedFilePaths,
+  onToggleSelect,
+  className,
+}: RepoFileTreeProps) {
   const tree = useMemo(() => buildTree(files), [files]);
 
-  // İlk səviyyə qovluqlar defolt açıq olsun
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(tree.filter((n) => n.type === "folder").map((n) => n.path))
   );
@@ -269,6 +324,8 @@ export function RepoFileTree({ files, selectedPath, onSelectFile, className }: R
           depth={0}
           selectedPath={selectedPath}
           onSelectFile={onSelectFile}
+          selectedFilePaths={selectedFilePaths}
+          onToggleSelect={onToggleSelect}
           expanded={expanded}
           toggleExpand={toggleExpand}
         />

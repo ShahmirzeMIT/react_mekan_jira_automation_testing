@@ -6,7 +6,7 @@ import { ConnectionBadge } from "@/components/common/Badges";
 import { useAppStore } from "@/store/appStore";
 import { useAuth } from "@/hooks/useAuth";
 import { useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { Space, Card } from "antd";
 import { ReloadOutlined, LoadingOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
@@ -20,22 +20,41 @@ import { RepoPreviewPanel } from "@/components/github/preview/RepoPreviewPanel";
 import { extractFileContent } from "@/lib/extractFileContent";
 import { LoaderPinwheelIcon } from "lucide-react";
 
-export default function GithubFiles() {
+export interface SelectedGithubFile {
+  path: string;
+  content: string;
+  loading?: boolean;
+}
+
+export interface GithubFilesHandle {
+  removeSelectedFile: (path: string) => void;
+  clearSelectedFiles: () => void;
+}
+
+interface GithubFilesProps {
+  onSelectedFilesChange?: (files: SelectedGithubFile[]) => void;
+}
+
+function GithubFilesInner(
+  { onSelectedFilesChange }: GithubFilesProps,
+  ref: React.Ref<GithubFilesHandle>
+) {
   const { integrations } = useAppStore();
   const { user } = useAuth();
   const { projectId = "p-1" } = useParams();
 
   const [isLoadingContent, setIsLoadingContent] = useState(false);
 
-  // Repo faylları (tree üçün)
   const [repoFiles, setRepoFiles] = useState<RepoFileEntry[]>([]);
   const [repoLoaded, setRepoLoaded] = useState(false);
 
-  // Seçilmiş fayl və onun content-i
   const [selectedFilePath, setSelectedFilePath] = useState<string | undefined>();
   const [fileContent, setFileContent] = useState<string>("");
   const [isFileLoading, setIsFileLoading] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+
+  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
+  const [fileContentCache, setFileContentCache] = useState<Record<string, string>>({});
 
   const {
     isConnected,
@@ -51,10 +70,6 @@ export default function GithubFiles() {
     fetchBranches,
     connectGithub,
     fetchRepoContent,
-    // TODO: useGithub hook-una fetchFileContent(repo, branch, path, githubId) əlavə edin.
-    // Backend-də GitHub Contents API-ni (bir fayl üçün) çağırıb base64 content-i
-    // decode edərək { content: string } formatında qaytarmalıdır. Aşağıda
-    // handleFileSelect içində necə istifadə olunduğunu görə bilərsiniz.
     fetchFileContent,
   } = useGithub() as any;
 
@@ -66,14 +81,67 @@ export default function GithubFiles() {
     }
   }, [isConnected, user]);
 
+  useEffect(() => {
+    const pathsToFetch = Array.from(selectedPaths).filter((p) => !(p in fileContentCache));
+    if (pathsToFetch.length === 0) return;
+
+    pathsToFetch.forEach(async (path) => {
+      try {
+        const raw = await fetchFileContent(selectedRepo, selectedBranch, path);
+        const extracted = extractFileContent(raw);
+        setFileContentCache((prev) => ({ ...prev, [path]: extracted }));
+      } catch (err) {
+        console.error("Seçilmiş fayl content-i alınmadı:", path, err);
+        setFileContentCache((prev) => ({ ...prev, [path]: "" }));
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPaths]);
+
+  useEffect(() => {
+    if (!onSelectedFilesChange) return;
+    const list: SelectedGithubFile[] = Array.from(selectedPaths).map((path) => ({
+      path,
+      content: fileContentCache[path] ?? "",
+      loading: !(path in fileContentCache),
+    }));
+    onSelectedFilesChange(list);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPaths, fileContentCache]);
+
+  useImperativeHandle(ref, () => ({
+    removeSelectedFile: (path: string) => {
+      setSelectedPaths((prev) => {
+        if (!prev.has(path)) return prev;
+        const next = new Set(prev);
+        next.delete(path);
+        return next;
+      });
+    },
+    clearSelectedFiles: () => setSelectedPaths(new Set()),
+  }));
+
+  const handleToggleFileSelection = (path: string) => {
+    setSelectedPaths((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
+
   const handleRepoSelect = (value: string) => {
     setSelectedRepo(value);
-    // Repo dəyişəndə əvvəlki fayl ağacı və seçimi təmizlə
     setRepoFiles([]);
     setRepoLoaded(false);
     setSelectedFilePath(undefined);
     setFileContent("");
     setFileError(null);
+    setSelectedPaths(new Set());
+    setFileContentCache({});
     if (value) {
       fetchBranches(value, githubId || "");
     }
@@ -92,7 +160,6 @@ export default function GithubFiles() {
     toast.success("Refreshed successfully!");
   };
 
-  // Repo content-i çək (fayl siyahısı + folder structure) -> sağ sidebar-da tree qurulur
   const handleSubmit = async () => {
     if (!selectedRepo) {
       toast.error("Please select a repository");
@@ -111,8 +178,6 @@ export default function GithubFiles() {
       toast.info(`Fetching content from ${selectedRepo} (${selectedBranch})...`);
 
       const data = await fetchRepoContent(selectedRepo, selectedBranch);
-
-      // API cavabınız "files" massivini fərqli açarda qaytara bilər - hər ikisini yoxlayırıq
       const files: RepoFileEntry[] = data?.files ?? data?.data?.files ?? [];
 
       setRepoFiles(files);
@@ -128,12 +193,17 @@ export default function GithubFiles() {
     }
   };
 
-  // Ağacda fayl seçiləndə həmin faylın content-ini çək
+  // Ağacda fayl adına klikləndə çağırılır. Debug logları qoyulub ki,
+  // problemin harada olduğunu (klik çatmır / fetch xəta verir / content boşdur)
+  // dəqiq konsoldan görə biləsiniz.
   const handleFileSelect = async (path: string) => {
+    console.log("📂 handleFileSelect çağırıldı, path:", path, "repo:", selectedRepo, "branch:", selectedBranch);
+
     setSelectedFilePath(path);
     setFileContent("");
     setFileError(null);
     setIsFileLoading(true);
+
     try {
       if (typeof fetchFileContent !== "function") {
         throw new Error(
@@ -142,26 +212,19 @@ export default function GithubFiles() {
       }
 
       const result = await fetchFileContent(selectedRepo, selectedBranch, path);
-
-      // DEBUG: konsolda faktiki cavabın formasını görmək üçün. Problemi tapdıqdan
-      // sonra bu sətri silə bilərsiniz.
       console.log("📄 fetchFileContent xam nəticə:", result);
 
-      if (result === undefined) {
-        throw new Error(
-          "useGithub hook-undakı fetchFileContent heç bir dəyər qaytarmadı (undefined). Hook daxilində API cavabını return etdiyinizi yoxlayın."
-        );
-      }
-
       const extracted = extractFileContent(result);
+      console.log("✅ extractFileContent nəticəsi (uzunluq):", extracted?.length ?? 0);
 
       if (!extracted) {
         throw new Error("Fayl content-i boşdur — backend cavabının strukturunu konsoldan yoxlayın.");
       }
 
       setFileContent(extracted);
+      setFileContentCache((prev) => (prev[path] !== undefined ? prev : { ...prev, [path]: extracted }));
     } catch (err) {
-      console.error("Fayl content yüklənərkən xəta:", err);
+      console.error("❌ Fayl content yüklənərkən xəta:", err);
       setFileError(err instanceof Error ? err.message : "Fayl yüklənə bilmədi");
     } finally {
       setIsFileLoading(false);
@@ -171,10 +234,6 @@ export default function GithubFiles() {
   const isConnectedCheck = integrations.githubConnected || isConnected;
 
   return (
-    // h-full + flex-col + overflow-hidden on the root, with only the body
-    // below scrolling: this component now behaves like a panel that fits
-    // whatever box it's placed in, instead of assuming it owns the whole
-    // viewport. The header stays pinned; everything else scrolls under it.
     <div className="flex h-full w-full flex-col overflow-hidden">
       <div className="shrink-0 px-3 pt-3">
         <PageHeader
@@ -194,7 +253,6 @@ export default function GithubFiles() {
       {isConnectedCheck && (
         <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
           <Space direction="vertical" size="middle" className="w-full">
-            {/* Repository / Branch seçimi və düymələr */}
             <Card size="small" className="surface">
               <div className="flex flex-col gap-3 md:flex-row md:items-end md:flex-wrap">
                 <div className="min-w-[180px] flex-1">
@@ -257,19 +315,20 @@ export default function GithubFiles() {
                     Selected: <span className="font-medium text-foreground">{selectedRepo}</span>
                     <span className="mx-2">→</span>
                     <span className="font-medium text-foreground">{selectedBranch}</span>
+                    {selectedPaths.size > 0 && (
+                      <>
+                        <span className="mx-2">•</span>
+                        <span className="font-medium text-primary">{selectedPaths.size} fayl AI üçün seçilib</span>
+                      </>
+                    )}
                   </span>
                 </div>
               )}
             </Card>
 
-            {/* Ortada fayl content-i, sağda fayl ağacı (sidebar) */}
             {repoLoaded && (
               <Card size="small" className="surface" bodyStyle={{ padding: 0 }}>
-                {/* Fixed but modest height: this whole page already scrolls
-                    (see the wrapper above), so this only needs to be tall
-                    enough to be usable, not to fit everything unscrolled. */}
                 <div className="flex flex-col md:flex-row h-[380px]">
-                  {/* ORTA - content */}
                   <div className="flex-1 p-3 overflow-hidden min-w-0">
                     <FileContentViewer
                       filePath={selectedFilePath}
@@ -280,15 +339,19 @@ export default function GithubFiles() {
                     />
                   </div>
 
-                  {/* SAĞ - fayl ağacı sidebar */}
                   <div className="w-full md:w-64 border-t md:border-t-0 md:border-l flex flex-col">
-                    <div className="px-3 py-2 border-b text-xs font-medium text-muted-foreground shrink-0">
-                      Files ({repoFiles.length})
+                    <div className="px-3 py-2 border-b text-xs font-medium text-muted-foreground shrink-0 flex items-center justify-between">
+                      <span>Files ({repoFiles.length})</span>
+                      {selectedPaths.size > 0 && (
+                        <span className="text-primary">{selectedPaths.size} seçilib</span>
+                      )}
                     </div>
                     <RepoFileTree
                       files={repoFiles}
                       selectedPath={selectedFilePath}
                       onSelectFile={handleFileSelect}
+                      selectedFilePaths={selectedPaths}
+                      onToggleSelect={handleToggleFileSelection}
                       className="flex-1"
                     />
                   </div>
@@ -301,3 +364,6 @@ export default function GithubFiles() {
     </div>
   );
 }
+
+const GithubFiles = forwardRef<GithubFilesHandle, GithubFilesProps>(GithubFilesInner);
+export default GithubFiles;

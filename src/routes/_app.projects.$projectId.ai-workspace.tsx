@@ -1,9 +1,12 @@
 // pages/AIWorkspacePage.tsx
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Send } from "lucide-react";
-import GithubFiles from "@/components/ai-workspace/GithubFiles";
+
+import { SelectedFilesMenu } from "@/components/ai-workspace/SelectedFilesMenu";
+import GithubFiles, { GithubFilesHandle, SelectedGithubFile } from "@/components/ai-workspace/GithubFiles";
+
 
 interface JiraIssue {
   id: string;
@@ -106,7 +109,18 @@ export default function AIWorkspacePage() {
   const [notes, setNotes] = useState("");
   const [sending, setSending] = useState(false);
 
+  // GitHub tree-də checkbox ilə seçilmiş fayllar (path + content). GithubFiles
+  // bunları özü doldurur (fetch edir), biz sadəcə göstərmək/silmək üçün saxlayırıq.
+  const [selectedGithubFiles, setSelectedGithubFiles] = useState<SelectedGithubFile[]>([]);
+  const githubFilesRef = useRef<GithubFilesHandle>(null);
+
   const selected = useMemo(() => issues.find((i) => i.key === selectedKey) ?? null, [issues, selectedKey]);
+
+  // Menyudakı "X" düyməsi buraya gəlir - GithubFiles-ın öz state-ini (ref
+  // vasitəsilə) dəyişirik ki, tree-dəki checkbox da avtomatik "unchecked" olsun.
+  const handleRemoveGithubFile = (path: string) => {
+    githubFilesRef.current?.removeSelectedFile(path);
+  };
 
   async function handleDispatch() {
     if (!selected) return;
@@ -116,6 +130,10 @@ export default function AIWorkspacePage() {
         key: selected.key,
         summary: selected.fields.summary,
         notes: notes.trim() || undefined,
+        // Seçilmiş GitHub fayllarının path+content-i - hələ yüklənməkdə olanlar süzülür
+        githubFiles: selectedGithubFiles
+          .filter((f) => !f.loading)
+          .map(({ path, content }) => ({ path, content })),
       };
       // TODO: replace with the real API call.
       await new Promise((resolve) => setTimeout(resolve, 600));
@@ -221,17 +239,21 @@ export default function AIWorkspacePage() {
                 {selected ? `${selected.key} — ${selected.fields.summary}` : "Nothing selected yet"}
               </p>
             </div>
-            <Button onClick={handleDispatch} disabled={!selected || sending}>
-              <Send className="mr-2 size-4" aria-hidden />
-              {sending ? "Sending…" : "Send to AI"}
-            </Button>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <SelectedFilesMenu files={selectedGithubFiles} onRemove={handleRemoveGithubFile} />
+              <Button onClick={handleDispatch} disabled={!selected || sending}>
+                <Send className="mr-2 size-4" aria-hidden />
+                {sending ? "Sending…" : "Send to AI"}
+              </Button>
+            </div>
           </div>
 
           {/* min-h-0 is required on every level of this chain (section, this
               div) or a flex child's default min-height:auto lets GithubFiles
               grow past its box and drags the whole page into scroll. */}
           <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-border/60">
-            <GithubFiles />
+            <GithubFiles ref={githubFilesRef} onSelectedFilesChange={setSelectedGithubFiles} />
           </div>
         </section>
       </div>
