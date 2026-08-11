@@ -1,11 +1,16 @@
 // pages/AIWorkspacePage.tsx
 import { useMemo, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Send } from "lucide-react";
 
+import { ProjectRequiredState } from "@/components/common/States";
 import { SelectedFilesMenu } from "@/components/ai-workspace/SelectedFilesMenu";
-import GithubFiles, { GithubFilesHandle, SelectedGithubFile } from "@/components/ai-workspace/GithubFiles";
+import GithubFiles, {
+  GithubFilesHandle,
+  SelectedGithubFile,
+} from "@/components/ai-workspace/GithubFiles";
 import { AIResultDrawer } from "@/components/ai-workspace/AIResultDrawer";
 import { useGemini } from "@/hooks/useGemini";
 import { parseGeminiResponse } from "@/lib/parseGeminiResponse";
@@ -33,7 +38,8 @@ const DEMO_ISSUES: JiraIssue[] = [
     id: "10007",
     key: "SCRUM-8",
     fields: {
-      summary: "Update the Contact page by converting all user-facing text to English and improving the contact form. Add Full Name, Email, Phone Number, Company, Subject, and Message fields. Make Full Name, Email, Phone Number, Subject, and Message required, while Company should remain optional. Add proper validation for every field, including email format, phone number format, minimum character requirements, and maximum character limits where appropriate. Display clear English validation messages for invalid fields and make sure errors disappear when the user corrects the input. Prevent form submission when validation fails, show a loading state while submitting, and disable the submit button during submission. Preserve the existing form submission functionality, styling, responsive behavior, and project architecture. Reuse existing shared form components, validation utilities, hooks, and UI components where possible, and avoid modifying unrelated files or functionality. Ensure the final implementation is fully typed, accessible, and does not introduce any TypeScript, import, or runtime errors.",
+      summary:
+        "Update the Contact page by converting all user-facing text to English and improving the contact form. Add Full Name, Email, Phone Number, Company, Subject, and Message fields. Make Full Name, Email, Phone Number, Subject, and Message required, while Company should remain optional. Add proper validation for every field, including email format, phone number format, minimum character requirements, and maximum character limits where appropriate. Display clear English validation messages for invalid fields and make sure errors disappear when the user corrects the input. Prevent form submission when validation fails, show a loading state while submitting, and disable the submit button during submission. Preserve the existing form submission functionality, styling, responsive behavior, and project architecture. Reuse existing shared form components, validation utilities, hooks, and UI components where possible, and avoid modifying unrelated files or functionality. Ensure the final implementation is fully typed, accessible, and does not introduce any TypeScript, import, or runtime errors.",
       issuetype: {
         name: "Story",
         iconUrl:
@@ -76,10 +82,26 @@ const DEMO_ISSUES: JiraIssue[] = [
 ];
 
 const STATUS_STYLES: Record<string, { rail: string; dot: string; pill: string }> = {
-  green: { rail: "bg-emerald-500", dot: "bg-emerald-500", pill: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
-  yellow: { rail: "bg-amber-500", dot: "bg-amber-500", pill: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
-  "blue-gray": { rail: "bg-sky-500", dot: "bg-sky-500", pill: "bg-sky-500/10 text-sky-600 dark:text-sky-400" },
-  gray: { rail: "bg-slate-400", dot: "bg-slate-400", pill: "bg-slate-500/10 text-slate-500 dark:text-slate-400" },
+  green: {
+    rail: "bg-emerald-500",
+    dot: "bg-emerald-500",
+    pill: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  },
+  yellow: {
+    rail: "bg-amber-500",
+    dot: "bg-amber-500",
+    pill: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  },
+  "blue-gray": {
+    rail: "bg-sky-500",
+    dot: "bg-sky-500",
+    pill: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
+  },
+  gray: {
+    rail: "bg-slate-400",
+    dot: "bg-slate-400",
+    pill: "bg-slate-500/10 text-slate-500 dark:text-slate-400",
+  },
 };
 
 function statusStyle(colorName: string) {
@@ -98,8 +120,10 @@ function relativeTime(iso: string): string {
 }
 
 export default function AIWorkspacePage() {
+  const { projectId } = useParams<{ projectId?: string }>();
   const issues = useMemo(
-    () => [...DEMO_ISSUES].sort((a, b) => +new Date(b.fields.updated) - +new Date(a.fields.updated)),
+    () =>
+      [...DEMO_ISSUES].sort((a, b) => +new Date(b.fields.updated) - +new Date(a.fields.updated)),
     [],
   );
 
@@ -117,7 +141,12 @@ export default function AIWorkspacePage() {
   const [aiResult, setAiResult] = useState<GeminiTaskResult | null>(null);
   const [aiRawFallback, setAiRawFallback] = useState<string | null>(null);
 
-  const selected = useMemo(() => issues.find((i) => i.key === selectedKey) ?? null, [issues, selectedKey]);
+  const selected = useMemo(
+    () => issues.find((i) => i.key === selectedKey) ?? null,
+    [issues, selectedKey],
+  );
+
+  if (!projectId) return <ProjectRequiredState pageName="AI Workspace" />;
 
   const handleRemoveGithubFile = (path: string) => {
     githubFilesRef.current?.removeSelectedFile(path);
@@ -200,7 +229,10 @@ export default function AIWorkspacePage() {
                         : "border-border/60 hover:border-border hover:bg-muted/40")
                     }
                   >
-                    <span className={`absolute left-0 top-0 h-full w-1 ${style.rail}`} aria-hidden />
+                    <span
+                      className={`absolute left-0 top-0 h-full w-1 ${style.rail}`}
+                      aria-hidden
+                    />
 
                     <img
                       src={issue.fields.issuetype.iconUrl}
@@ -235,7 +267,12 @@ export default function AIWorkspacePage() {
                           {issue.fields.status.name}
                         </span>
                         <span className="inline-flex items-center gap-1 text-[9px] text-muted-foreground">
-                          <img src={issue.fields.priority.iconUrl} alt="" className="size-2.5" aria-hidden />
+                          <img
+                            src={issue.fields.priority.iconUrl}
+                            alt=""
+                            className="size-2.5"
+                            aria-hidden
+                          />
                           {issue.fields.priority.name}
                         </span>
                       </div>
@@ -251,13 +288,15 @@ export default function AIWorkspacePage() {
         <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-border bg-card p-3">
           <div className="mb-2.5 flex shrink-0 items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Loaded issue</p>
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                Loaded issue
+              </p>
               <p className="truncate text-sm font-medium">
                 {selected
                   ? (() => {
-                    const text = `${selected.key} — ${selected.fields.summary}`;
-                    return text.length > 100 ? `${text.slice(0, 100)}...` : text;
-                  })()
+                      const text = `${selected.key} — ${selected.fields.summary}`;
+                      return text.length > 100 ? `${text.slice(0, 100)}...` : text;
+                    })()
                   : "Nothing selected yet"}
               </p>
             </div>

@@ -11,7 +11,9 @@ function useServiceData<T>(load: () => Promise<T>, enabled = true) {
 
   const refetch = useCallback(async () => {
     if (!enabled) {
+      setData(undefined);
       setIsLoading(false);
+      setError(null);
       return;
     }
     setIsLoading(true);
@@ -38,19 +40,25 @@ export function useProjects() {
   return useServiceData(useCallback(() => projectService.getProjects(), []));
 }
 
-export function useProject(id: string) {
-  return useServiceData(useCallback(() => projectService.getProject(id), [id]));
-}
-
-export function useTasks(projectId: string, enabled = true) {
+export function useProject(id?: string) {
   return useServiceData(
-    useCallback(() => taskService.getTasks(projectId), [projectId]),
-    enabled,
+    useCallback(() => projectService.getProject(id ?? ""), [id]),
+    Boolean(id),
   );
 }
 
-export function useTask(projectId: string, key: string) {
-  return useServiceData(useCallback(() => taskService.getTask(projectId, key), [projectId, key]));
+export function useTasks(projectId?: string, enabled = true) {
+  return useServiceData(
+    useCallback(() => taskService.getTasks(projectId ?? ""), [projectId]),
+    Boolean(projectId) && enabled,
+  );
+}
+
+export function useTask(projectId?: string, key?: string) {
+  return useServiceData(
+    useCallback(() => taskService.getTask(projectId ?? "", key ?? ""), [projectId, key]),
+    Boolean(projectId && key),
+  );
 }
 
 export function useRepositories(enabled = true) {

@@ -8,9 +8,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { EmptyState, ListSkeleton } from "@/components/common/States";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { EmptyState, ListSkeleton, ProjectRequiredState } from "@/components/common/States";
 import { ConnectionBadge, TaskPriorityBadge, TaskStatusBadge } from "@/components/common/Badges";
 import { useAppStore } from "@/store/appStore";
 import { taskService, type TaskFilters } from "@/services/taskService";
@@ -20,14 +33,17 @@ import type { Task, TaskPriority, TaskStatus } from "@/types";
 import { db } from "@/config/firebase";
 import { useAuth } from "@/hooks/useAuth";
 
-
 export default function TasksPage() {
-  const { projectId = "p-1" } = useParams();
+  const { projectId } = useParams<{ projectId?: string }>();
   const { integrations, idToken, logActivity } = useAppStore();
   const [filters, setFilters] = useState<TaskFilters>({ search: "" });
   const [connectOpen, setConnectOpen] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [newTask, setNewTask] = useState({ title: "", description: "", priority: "MEDIUM" as TaskPriority });
+  const [newTask, setNewTask] = useState({
+    title: "",
+    description: "",
+    priority: "MEDIUM" as TaskPriority,
+  });
   const [taskOpen, setTaskOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [jiraAccessToken, setJiraAccessToken] = useState<string | null>(null);
@@ -40,23 +56,25 @@ export default function TasksPage() {
   const hasJiraConnection = integrations.jiraConnected || Boolean(jiraAccessToken);
   const visible = useMemo(() => taskService.filterTasks(tasks, filters), [tasks, filters]);
   const [editingTask, setEditingTask] = useState<(typeof tasks)[number] | null>(null);
-  
+
   // Get current user from Firebase Auth
   const { user, loading: authLoading } = useAuth();
 
   const refetch = useCallback(async () => {
-    if (!jiraAccessToken || !jiraCloudId || !jiraAccountId) {
+    if (!projectId || !jiraAccessToken || !jiraCloudId || !jiraAccountId) {
       setTasks([]);
       return;
     }
 
     setIsLoading(true);
     try {
-      setTasks(await jiraService.getCanvasTasks(projectId, {
-        accessToken: jiraAccessToken,
-        cloudId: jiraCloudId,
-        accountId: jiraAccountId,
-      }));
+      setTasks(
+        await jiraService.getCanvasTasks(projectId, {
+          accessToken: jiraAccessToken,
+          cloudId: jiraCloudId,
+          accountId: jiraAccountId,
+        }),
+      );
     } catch (error) {
       console.error("Unable to load Jira issues:", error);
       setTasks([]);
@@ -69,11 +87,19 @@ export default function TasksPage() {
   useEffect(() => {
     void refetch();
   }, [refetch]);
-  
 
   // Fetch Jira user data from Firestore
   useEffect(() => {
     const fetchJiraUserData = async () => {
+      if (!projectId) {
+        setJiraAccessToken(null);
+        setJiraCloudId(null);
+        setJiraAccountId(null);
+        setJiraUserEmail(null);
+        setJiraUserDataLoading(false);
+        return;
+      }
+
       setJiraUserDataLoading(true);
       if (!user?.email) {
         setJiraUserDataLoading(false);
@@ -87,33 +113,39 @@ export default function TasksPage() {
 
       try {
         const snapshot = await getDocs(collection(db, "jira_users"));
-        console.log(user.email,'user.email');
-        
+        console.log(user.email, "user.email");
+
         const normalizedUserEmail = user.email.trim().toLowerCase();
-        console.log(normalizedUserEmail,'normalizedUserEmail');
-        const jiraUsers: Array<Record<string, unknown> & { id: string }> = snapshot.docs.map((document) => ({
-          id: document.id,
-          ...document.data(),
-        }));
-      
-        
+        console.log(normalizedUserEmail, "normalizedUserEmail");
+        const jiraUsers: Array<Record<string, unknown> & { id: string }> = snapshot.docs.map(
+          (document) => ({
+            id: document.id,
+            ...document.data(),
+          }),
+        );
+
         const emailFor = (data: Record<string, unknown>) => {
           const integration = data["jiraIntegration"];
           const integrationEmail =
             typeof integration === "object" && integration !== null
               ? (integration as Record<string, unknown>)["jiraUserEmail"]
               : undefined;
-          const email = data["jiraUserEmail"] ?? integrationEmail ?? data["jiraEmail"] ?? data["email"] ?? data["userEmail"];
+          const email =
+            data["jiraUserEmail"] ??
+            integrationEmail ??
+            data["jiraEmail"] ??
+            data["email"] ??
+            data["userEmail"];
           return typeof email === "string" ? email.trim().toLowerCase() : null;
         };
 
         const jiraUser = jiraUsers.find((data) => {
           const integration = data["jiraIntegration"];
-          const connected = data["isActive"] === true || (
-            typeof integration === "object" &&
-            integration !== null &&
-            (integration as Record<string, unknown>)["connected"] === true
-          );
+          const connected =
+            data["isActive"] === true ||
+            (typeof integration === "object" &&
+              integration !== null &&
+              (integration as Record<string, unknown>)["connected"] === true);
           return (
             emailFor(data) === normalizedUserEmail &&
             connected &&
@@ -125,7 +157,8 @@ export default function TasksPage() {
 
         if (jiraUser) {
           const integration = jiraUser["jiraIntegration"] as Record<string, unknown> | undefined;
-          const accessToken = typeof jiraUser["accessToken"] === "string" ? jiraUser["accessToken"] : null;
+          const accessToken =
+            typeof jiraUser["accessToken"] === "string" ? jiraUser["accessToken"] : null;
           const cloudId = jiraUser["defaultCloudId"] ?? integration?.["defaultCloudId"];
           const accountId = jiraUser["jiraAccountId"] ?? integration?.["jiraAccountId"];
           setJiraAccessToken(accessToken);
@@ -149,7 +182,7 @@ export default function TasksPage() {
     };
 
     fetchJiraUserData();
-  }, [user?.email, user?.uid]);
+  }, [projectId, user?.email, user?.uid]);
 
   // Log Jira data whenever it changes
   useEffect(() => {
@@ -158,6 +191,8 @@ export default function TasksPage() {
       console.log("Current Jira User Email:", jiraUserEmail);
     }
   }, [jiraAccessToken, jiraUserEmail]);
+
+  if (!projectId) return <ProjectRequiredState pageName="Tasks" />;
 
   async function handleConnect() {
     setConnecting(true);
@@ -173,27 +208,50 @@ export default function TasksPage() {
 
   const connectModal = (
     <Dialog open={connectOpen} onOpenChange={setConnectOpen}>
-      <DialogTrigger asChild><Button size="sm">Connect Jira</Button></DialogTrigger>
+      <DialogTrigger asChild>
+        <Button size="sm">Connect Jira</Button>
+      </DialogTrigger>
       <DialogContent>
-        <DialogHeader><DialogTitle>Connect Jira</DialogTitle></DialogHeader>
-        <p className="text-sm text-muted-foreground">You will be redirected to Atlassian to authorize this workspace. After approval, DevFlow returns you to your task list.</p>
-        <DialogFooter><Button onClick={handleConnect} disabled={connecting}>{connecting ? "Connecting…" : "Connect Jira"}</Button></DialogFooter>
+        <DialogHeader>
+          <DialogTitle>Connect Jira</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          You will be redirected to Atlassian to authorize this workspace. After approval, DevFlow
+          returns you to your task list.
+        </p>
+        <DialogFooter>
+          <Button onClick={handleConnect} disabled={connecting}>
+            {connecting ? "Connecting…" : "Connect Jira"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 
-  if (!authLoading && integrations.jiraConnectionChecked && !jiraUserDataLoading && !hasJiraConnection) {
+  if (
+    !authLoading &&
+    integrations.jiraConnectionChecked &&
+    !jiraUserDataLoading &&
+    !hasJiraConnection
+  ) {
     return (
       <div className="mx-auto max-w-3xl">
         <PageHeader title="Tasks" actions={connectModal} />
-        <EmptyState icon={<ListChecks className="size-5" />} title="Connect Jira to view your tasks"
-          description="Connect your Jira workspace to import and manage development tasks." action={connectModal} />
+        <EmptyState
+          icon={<ListChecks className="size-5" />}
+          title="Connect Jira to view your tasks"
+          description="Connect your Jira workspace to import and manage development tasks."
+          action={connectModal}
+        />
       </div>
     );
   }
 
   async function createTask() {
-    if (!newTask.title.trim()) { toast.error("Title is required."); return; }
+    if (!newTask.title.trim()) {
+      toast.error("Title is required.");
+      return;
+    }
     await taskService.createTask({ ...newTask, assignee: "Shahmir", labels: [], projectId });
     await refetch();
     logActivity("task", `Task created: ${newTask.title}`);
@@ -203,7 +261,10 @@ export default function TasksPage() {
   }
 
   async function updateTask() {
-    if (!editingTask || !editingTask.title.trim()) { toast.error("Task title is required."); return; }
+    if (!editingTask || !editingTask.title.trim()) {
+      toast.error("Task title is required.");
+      return;
+    }
     setSaving(true);
     try {
       await taskService.updateTask(editingTask.key, {
@@ -216,7 +277,9 @@ export default function TasksPage() {
       logActivity("task", `Task updated: ${editingTask.title}`, { taskKey: editingTask.key });
       toast.success("Task updated.");
       setEditingTask(null);
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function setTaskActive(task: (typeof tasks)[number], active: boolean) {
@@ -224,14 +287,18 @@ export default function TasksPage() {
     try {
       await taskService.updateTask(task.key, { active });
       await refetch();
-      logActivity("task", `Task ${active ? "activated" : "deactivated"}: ${task.title}`, { taskKey: task.key });
+      logActivity("task", `Task ${active ? "activated" : "deactivated"}: ${task.title}`, {
+        taskKey: task.key,
+      });
       toast.success(`Task ${active ? "activated" : "deactivated"}.`);
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <div className="mx-auto max-w-7xl">
-      <PageHeader 
+      <PageHeader
         title="Tasks"
         badge={
           <div className="flex items-center gap-2">
@@ -247,9 +314,9 @@ export default function TasksPage() {
         actions={
           <div className="flex items-center gap-2">
             {jiraAccessToken && (
-              <Button 
-                size="sm" 
-                variant="outline" 
+              <Button
+                size="sm"
+                variant="outline"
                 onClick={() => {
                   console.log("Jira Access Token:", jiraAccessToken);
                   console.log("Jira User Email:", jiraUserEmail);
@@ -260,20 +327,52 @@ export default function TasksPage() {
               </Button>
             )}
             <Dialog open={taskOpen} onOpenChange={setTaskOpen}>
-              <DialogTrigger asChild><Button size="sm"><Plus className="size-4" /> New Task</Button></DialogTrigger>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="size-4" /> New Task
+                </Button>
+              </DialogTrigger>
               <DialogContent>
-                <DialogHeader><DialogTitle>Create task</DialogTitle></DialogHeader>
+                <DialogHeader>
+                  <DialogTitle>Create task</DialogTitle>
+                </DialogHeader>
                 <div className="grid gap-3">
-                  <div className="grid gap-1.5"><Label>Title</Label><Input value={newTask.title} onChange={(e) => setNewTask({ ...newTask, title: e.target.value })} /></div>
-                  <div className="grid gap-1.5"><Label>Description</Label><Textarea value={newTask.description} onChange={(e) => setNewTask({ ...newTask, description: e.target.value })} /></div>
-                  <div className="grid gap-1.5"><Label>Priority</Label>
-                    <Select value={newTask.priority} onValueChange={(v) => setNewTask({ ...newTask, priority: v as TaskPriority })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>{["LOWEST","LOW","MEDIUM","HIGH","HIGHEST"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                  <div className="grid gap-1.5">
+                    <Label>Title</Label>
+                    <Input
+                      value={newTask.title}
+                      onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label>Description</Label>
+                    <Textarea
+                      value={newTask.description}
+                      onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label>Priority</Label>
+                    <Select
+                      value={newTask.priority}
+                      onValueChange={(v) => setNewTask({ ...newTask, priority: v as TaskPriority })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["LOWEST", "LOW", "MEDIUM", "HIGH", "HIGHEST"].map((p) => (
+                          <SelectItem key={p} value={p}>
+                            {p}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
                     </Select>
                   </div>
                 </div>
-                <DialogFooter><Button onClick={createTask}>Create Task</Button></DialogFooter>
+                <DialogFooter>
+                  <Button onClick={createTask}>Create Task</Button>
+                </DialogFooter>
               </DialogContent>
             </Dialog>
           </div>
@@ -281,55 +380,171 @@ export default function TasksPage() {
       />
 
       <div className="surface mb-3 flex flex-wrap items-center gap-2 p-3">
-        <Input placeholder="Search title or key…" className="h-9 max-w-xs"
-          value={filters.search ?? ""} onChange={(e) => setFilters({ ...filters, search: e.target.value })} />
-        <Select value={filters.status?.[0] ?? "ALL"} onValueChange={(v) => setFilters({ ...filters, ...(v === "ALL" ? { status: [] } : { status: [v as TaskStatus] }) })}>
-          <SelectTrigger className="h-9 w-40"><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent><SelectItem value="ALL">All statuses</SelectItem>
-            {(["TODO","IN_PROGRESS","IN_REVIEW","DONE","BLOCKED"] as TaskStatus[]).map((s) => <SelectItem key={s} value={s}>{statusLabel[s]}</SelectItem>)}
+        <Input
+          placeholder="Search title or key…"
+          className="h-9 max-w-xs"
+          value={filters.search ?? ""}
+          onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+        />
+        <Select
+          value={filters.status?.[0] ?? "ALL"}
+          onValueChange={(v) =>
+            setFilters({
+              ...filters,
+              ...(v === "ALL" ? { status: [] } : { status: [v as TaskStatus] }),
+            })
+          }
+        >
+          <SelectTrigger className="h-9 w-40">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All statuses</SelectItem>
+            {(["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "BLOCKED"] as TaskStatus[]).map((s) => (
+              <SelectItem key={s} value={s}>
+                {statusLabel[s]}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
-        <Select value={filters.priority?.[0] ?? "ALL"} onValueChange={(v) => setFilters({ ...filters, ...(v === "ALL" ? { priority: [] } : { priority: [v as TaskPriority] }) })}>
-          <SelectTrigger className="h-9 w-36"><SelectValue placeholder="Priority" /></SelectTrigger>
-          <SelectContent><SelectItem value="ALL">All priorities</SelectItem>
-            {(["LOWEST","LOW","MEDIUM","HIGH","HIGHEST"] as TaskPriority[]).map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+        <Select
+          value={filters.priority?.[0] ?? "ALL"}
+          onValueChange={(v) =>
+            setFilters({
+              ...filters,
+              ...(v === "ALL" ? { priority: [] } : { priority: [v as TaskPriority] }),
+            })
+          }
+        >
+          <SelectTrigger className="h-9 w-36">
+            <SelectValue placeholder="Priority" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All priorities</SelectItem>
+            {(["LOWEST", "LOW", "MEDIUM", "HIGH", "HIGHEST"] as TaskPriority[]).map((p) => (
+              <SelectItem key={p} value={p}>
+                {p}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
-        <Select value={filters.ai ?? "ALL"} onValueChange={(v) => setFilters({ ...filters, ...(v === "ALL" ? { ai: undefined as never } : { ai: v as "assisted" }) })}>
-          <SelectTrigger className="h-9 w-36"><SelectValue placeholder="AI" /></SelectTrigger>
-          <SelectContent><SelectItem value="ALL">Any AI state</SelectItem><SelectItem value="assisted">AI assisted</SelectItem><SelectItem value="not_assisted">Not assisted</SelectItem></SelectContent>
+        <Select
+          value={filters.ai ?? "ALL"}
+          onValueChange={(v) =>
+            setFilters({
+              ...filters,
+              ...(v === "ALL" ? { ai: undefined as never } : { ai: v as "assisted" }),
+            })
+          }
+        >
+          <SelectTrigger className="h-9 w-36">
+            <SelectValue placeholder="AI" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Any AI state</SelectItem>
+            <SelectItem value="assisted">AI assisted</SelectItem>
+            <SelectItem value="not_assisted">Not assisted</SelectItem>
+          </SelectContent>
         </Select>
-        <span className="ml-auto font-mono text-[11px] text-muted-foreground">{visible.length} / {tasks.length}</span>
+        <span className="ml-auto font-mono text-[11px] text-muted-foreground">
+          {visible.length} / {tasks.length}
+        </span>
       </div>
 
-      {isLoading ? <ListSkeleton /> : visible.length === 0 ? (
-        <EmptyState title="No tasks match your filters" description="Adjust the search or filters to see more tasks." />
+      {isLoading ? (
+        <ListSkeleton />
+      ) : visible.length === 0 ? (
+        <EmptyState
+          title="No tasks match your filters"
+          description="Adjust the search or filters to see more tasks."
+        />
       ) : (
         <div className="surface overflow-x-auto">
           <table className="w-full min-w-[880px] text-sm">
             <thead className="text-[11px] tracking-wide text-muted-foreground uppercase">
-              <tr>{["Key","Title","Status","Priority","Assignee","GitHub","AI","Updated","Actions"].map((h) => <th key={h} className="px-4 py-2.5 text-left font-medium">{h}</th>)}</tr>
+              <tr>
+                {[
+                  "Key",
+                  "Title",
+                  "Status",
+                  "Priority",
+                  "Assignee",
+                  "GitHub",
+                  "AI",
+                  "Updated",
+                  "Actions",
+                ].map((h) => (
+                  <th key={h} className="px-4 py-2.5 text-left font-medium">
+                    {h}
+                  </th>
+                ))}
+              </tr>
             </thead>
             <tbody>
               {visible.map((t) => (
                 <tr key={t.key} className="border-t border-border hover:bg-muted/40">
                   <td className="px-4 py-2.5 font-mono text-xs">{t.key}</td>
-                  <td className="px-4 py-2.5"><Link to={`/projects/${projectId}/tasks/${t.key}`} className="hover:text-primary">{t.title}</Link></td>
-                  <td className="px-4 py-2.5"><TaskStatusBadge status={t.status} /></td>
-                  <td className="px-4 py-2.5"><TaskPriorityBadge priority={t.priority} /></td>
+                  <td className="px-4 py-2.5">
+                    <Link
+                      to={`/projects/${projectId}/tasks/${t.key}`}
+                      className="hover:text-primary"
+                    >
+                      {t.title}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <TaskStatusBadge status={t.status} />
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <TaskPriorityBadge priority={t.priority} />
+                  </td>
                   <td className="px-4 py-2.5 text-muted-foreground">{t.assignee.name}</td>
-                  <td className="px-4 py-2.5 text-xs text-muted-foreground">{t.githubConnected ? "Connected" : "Not connected"}</td>
-                  <td className="px-4 py-2.5 text-xs text-muted-foreground">{t.aiAssisted ? "Assisted" : "Not assisted"}</td>
-                  <td className="px-4 py-2.5 font-mono text-[11px] text-muted-foreground">{relativeTime(t.updatedAt)}</td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                    {t.githubConnected ? "Connected" : "Not connected"}
+                  </td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                    {t.aiAssisted ? "Assisted" : "Not assisted"}
+                  </td>
+                  <td className="px-4 py-2.5 font-mono text-[11px] text-muted-foreground">
+                    {relativeTime(t.updatedAt)}
+                  </td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-1">
-                      <Button size="icon" variant="ghost" onClick={() => setEditingTask({ ...t })} aria-label={`Update ${t.key}`} title="Update task"><Pencil className="size-4" /></Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setEditingTask({ ...t })}
+                        aria-label={`Update ${t.key}`}
+                        title="Update task"
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
                       {t.active !== false ? (
-                        <Button size="icon" variant="ghost" onClick={() => void setTaskActive(t, false)} disabled={saving} aria-label={`Deactivate ${t.key}`} title="Deactivate task"><Square className="size-4" /></Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => void setTaskActive(t, false)}
+                          disabled={saving}
+                          aria-label={`Deactivate ${t.key}`}
+                          title="Deactivate task"
+                        >
+                          <Square className="size-4" />
+                        </Button>
                       ) : (
-                        <Button size="icon" variant="ghost" onClick={() => void setTaskActive(t, true)} disabled={saving} aria-label={`Activate ${t.key}`} title="Activate task"><Play className="size-4" /></Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => void setTaskActive(t, true)}
+                          disabled={saving}
+                          aria-label={`Activate ${t.key}`}
+                          title="Activate task"
+                        >
+                          <Play className="size-4" />
+                        </Button>
                       )}
-                      <Button size="sm" variant="ghost" asChild><Link to={`/projects/${projectId}/tasks/${t.key}`}>Open</Link></Button>
+                      <Button size="sm" variant="ghost" asChild>
+                        <Link to={`/projects/${projectId}/tasks/${t.key}`}>Open</Link>
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -340,24 +555,77 @@ export default function TasksPage() {
       )}
       <Dialog open={Boolean(editingTask)} onOpenChange={(open) => !open && setEditingTask(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Update task</DialogTitle></DialogHeader>
-          {editingTask && <div className="grid gap-3">
-            <div className="grid gap-1.5"><Label>Title</Label><Input value={editingTask.title} onChange={(e) => setEditingTask({ ...editingTask, title: e.target.value })} /></div>
-            <div className="grid gap-1.5"><Label>Description</Label><Textarea value={editingTask.description} onChange={(e) => setEditingTask({ ...editingTask, description: e.target.value })} /></div>
-            <div className="grid gap-1.5"><Label>Priority</Label>
-              <Select value={editingTask.priority} onValueChange={(priority) => setEditingTask({ ...editingTask, priority: priority as TaskPriority })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{["LOWEST", "LOW", "MEDIUM", "HIGH", "HIGHEST"].map((priority) => <SelectItem key={priority} value={priority}>{priority}</SelectItem>)}</SelectContent>
-              </Select>
+          <DialogHeader>
+            <DialogTitle>Update task</DialogTitle>
+          </DialogHeader>
+          {editingTask && (
+            <div className="grid gap-3">
+              <div className="grid gap-1.5">
+                <Label>Title</Label>
+                <Input
+                  value={editingTask.title}
+                  onChange={(e) => setEditingTask({ ...editingTask, title: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Description</Label>
+                <Textarea
+                  value={editingTask.description}
+                  onChange={(e) => setEditingTask({ ...editingTask, description: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Priority</Label>
+                <Select
+                  value={editingTask.priority}
+                  onValueChange={(priority) =>
+                    setEditingTask({ ...editingTask, priority: priority as TaskPriority })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["LOWEST", "LOW", "MEDIUM", "HIGH", "HIGHEST"].map((priority) => (
+                      <SelectItem key={priority} value={priority}>
+                        {priority}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Status</Label>
+                <Select
+                  value={editingTask.status}
+                  onValueChange={(status) =>
+                    setEditingTask({ ...editingTask, status: status as TaskStatus })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "BLOCKED"] as TaskStatus[]).map(
+                      (status) => (
+                        <SelectItem key={status} value={status}>
+                          {statusLabel[status]}
+                        </SelectItem>
+                      ),
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="grid gap-1.5"><Label>Status</Label>
-              <Select value={editingTask.status} onValueChange={(status) => setEditingTask({ ...editingTask, status: status as TaskStatus })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{(["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "BLOCKED"] as TaskStatus[]).map((status) => <SelectItem key={status} value={status}>{statusLabel[status]}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-          </div>}
-          <DialogFooter><Button variant="ghost" onClick={() => setEditingTask(null)}>Cancel</Button><Button onClick={() => void updateTask()} disabled={saving}><Power className="size-4" /> Save update</Button></DialogFooter>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditingTask(null)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void updateTask()} disabled={saving}>
+              <Power className="size-4" /> Save update
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -2,6 +2,7 @@
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
+import { ProjectRequiredState } from "@/components/common/States";
 import { ConnectionBadge } from "@/components/common/Badges";
 import { useAppStore } from "@/store/appStore";
 import { useAuth } from "@/hooks/useAuth";
@@ -23,7 +24,7 @@ import { LoaderPinwheelIcon } from "lucide-react";
 export default function GithubPage() {
   const { integrations } = useAppStore();
   const { user } = useAuth();
-  const { projectId = "p-1" } = useParams();
+  const { projectId } = useParams<{ projectId?: string }>();
 
   const [isLoadingContent, setIsLoadingContent] = useState(false);
 
@@ -61,10 +62,10 @@ export default function GithubPage() {
   const githubId = localStorage.getItem("devflow.github.id");
 
   useEffect(() => {
-    if (isConnected && user && githubId) {
+    if (projectId && isConnected && user && githubId) {
       fetchRepositories(githubId);
     }
-  }, [isConnected, user]);
+  }, [projectId, isConnected, user]);
 
   const handleRepoSelect = (value: string) => {
     setSelectedRepo(value);
@@ -137,7 +138,7 @@ export default function GithubPage() {
     try {
       if (typeof fetchFileContent !== "function") {
         throw new Error(
-          "fetchFileContent metodu useGithub hook-unda tapılmadı. Backend-də tək fayl content endpoint-i qoşub hook-a əlavə edin."
+          "fetchFileContent metodu useGithub hook-unda tapılmadı. Backend-də tək fayl content endpoint-i qoşub hook-a əlavə edin.",
         );
       }
 
@@ -149,14 +150,16 @@ export default function GithubPage() {
 
       if (result === undefined) {
         throw new Error(
-          "useGithub hook-undakı fetchFileContent heç bir dəyər qaytarmadı (undefined). Hook daxilində API cavabını return etdiyinizi yoxlayın."
+          "useGithub hook-undakı fetchFileContent heç bir dəyər qaytarmadı (undefined). Hook daxilində API cavabını return etdiyinizi yoxlayın.",
         );
       }
 
       const extracted = extractFileContent(result);
 
       if (!extracted) {
-        throw new Error("Fayl content-i boşdur — backend cavabının strukturunu konsoldan yoxlayın.");
+        throw new Error(
+          "Fayl content-i boşdur — backend cavabının strukturunu konsoldan yoxlayın.",
+        );
       }
 
       setFileContent(extracted);
@@ -170,12 +173,19 @@ export default function GithubPage() {
 
   const isConnectedCheck = integrations.githubConnected || isConnected;
 
+  if (!projectId) return <ProjectRequiredState pageName="GitHub" />;
+
   return (
     <div className="mx-auto max-w-7xl">
       <PageHeader
         title="GitHub"
         description="Repositories connected to this workspace."
-        badge={<ConnectionBadge label={isConnectedCheck ? "Connected" : "Not connected"} connected={isConnectedCheck} />}
+        badge={
+          <ConnectionBadge
+            label={isConnectedCheck ? "Connected" : "Not connected"}
+            connected={isConnectedCheck}
+          />
+        }
         actions={
           !isConnectedCheck ? (
             <Button size="sm" onClick={() => connectGithub(projectId)}>
@@ -191,7 +201,12 @@ export default function GithubPage() {
           <Card className="surface">
             <div className="flex flex-col md:flex-row gap-4 items-end">
               <div className="flex-1 min-w-[200px]">
-                <RepositorySelect repos={repos} loading={isLoadingRepos} value={selectedRepo} onChange={handleRepoSelect} />
+                <RepositorySelect
+                  repos={repos}
+                  loading={isLoadingRepos}
+                  value={selectedRepo}
+                  onChange={handleRepoSelect}
+                />
               </div>
 
               <div className="flex-1 min-w-[200px]">
@@ -236,7 +251,9 @@ export default function GithubPage() {
                   disabled={isLoadingRepos || isLoadingBranches || isLoadingContent}
                   className="whitespace-nowrap"
                 >
-                  <ReloadOutlined className={`mr-2 ${isLoadingRepos || isLoadingBranches ? "animate-spin" : ""}`} />
+                  <ReloadOutlined
+                    className={`mr-2 ${isLoadingRepos || isLoadingBranches ? "animate-spin" : ""}`}
+                  />
                   Refresh
                 </Button>
               </div>

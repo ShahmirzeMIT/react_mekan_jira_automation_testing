@@ -2,6 +2,7 @@
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
+import { ProjectRequiredState } from "@/components/common/States";
 import { ConnectionBadge } from "@/components/common/Badges";
 import { useAppStore } from "@/store/appStore";
 import { useAuth } from "@/hooks/useAuth";
@@ -37,11 +38,11 @@ interface GithubFilesProps {
 
 function GithubFilesInner(
   { onSelectedFilesChange }: GithubFilesProps,
-  ref: React.Ref<GithubFilesHandle>
+  ref: React.Ref<GithubFilesHandle>,
 ) {
   const { integrations } = useAppStore();
   const { user } = useAuth();
-  const { projectId = "p-1" } = useParams();
+  const { projectId } = useParams<{ projectId?: string }>();
 
   const [isLoadingContent, setIsLoadingContent] = useState(false);
 
@@ -76,10 +77,10 @@ function GithubFilesInner(
   const githubId = localStorage.getItem("devflow.github.id");
 
   useEffect(() => {
-    if (isConnected && user && githubId) {
+    if (projectId && isConnected && user && githubId) {
       fetchRepositories(githubId);
     }
-  }, [isConnected, user]);
+  }, [projectId, isConnected, user]);
 
   useEffect(() => {
     const pathsToFetch = Array.from(selectedPaths).filter((p) => !(p in fileContentCache));
@@ -197,7 +198,14 @@ function GithubFilesInner(
   // problemin harada olduğunu (klik çatmır / fetch xəta verir / content boşdur)
   // dəqiq konsoldan görə biləsiniz.
   const handleFileSelect = async (path: string) => {
-    console.log("📂 handleFileSelect çağırıldı, path:", path, "repo:", selectedRepo, "branch:", selectedBranch);
+    console.log(
+      "📂 handleFileSelect çağırıldı, path:",
+      path,
+      "repo:",
+      selectedRepo,
+      "branch:",
+      selectedBranch,
+    );
 
     setSelectedFilePath(path);
     setFileContent("");
@@ -207,7 +215,7 @@ function GithubFilesInner(
     try {
       if (typeof fetchFileContent !== "function") {
         throw new Error(
-          "fetchFileContent metodu useGithub hook-unda tapılmadı. Backend-də tək fayl content endpoint-i qoşub hook-a əlavə edin."
+          "fetchFileContent metodu useGithub hook-unda tapılmadı. Backend-də tək fayl content endpoint-i qoşub hook-a əlavə edin.",
         );
       }
 
@@ -218,11 +226,15 @@ function GithubFilesInner(
       console.log("✅ extractFileContent nəticəsi (uzunluq):", extracted?.length ?? 0);
 
       if (!extracted) {
-        throw new Error("Fayl content-i boşdur — backend cavabının strukturunu konsoldan yoxlayın.");
+        throw new Error(
+          "Fayl content-i boşdur — backend cavabının strukturunu konsoldan yoxlayın.",
+        );
       }
 
       setFileContent(extracted);
-      setFileContentCache((prev) => (prev[path] !== undefined ? prev : { ...prev, [path]: extracted }));
+      setFileContentCache((prev) =>
+        prev[path] !== undefined ? prev : { ...prev, [path]: extracted },
+      );
     } catch (err) {
       console.error("❌ Fayl content yüklənərkən xəta:", err);
       setFileError(err instanceof Error ? err.message : "Fayl yüklənə bilmədi");
@@ -233,13 +245,20 @@ function GithubFilesInner(
 
   const isConnectedCheck = integrations.githubConnected || isConnected;
 
+  if (!projectId) return <ProjectRequiredState pageName="GitHub files" />;
+
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
       <div className="shrink-0 px-3 pt-3">
         <PageHeader
           title="GitHub"
           description="Repositories connected to this workspace."
-          badge={<ConnectionBadge label={isConnectedCheck ? "Connected" : "Not connected"} connected={isConnectedCheck} />}
+          badge={
+            <ConnectionBadge
+              label={isConnectedCheck ? "Connected" : "Not connected"}
+              connected={isConnectedCheck}
+            />
+          }
           actions={
             !isConnectedCheck ? (
               <Button size="sm" onClick={() => connectGithub(projectId)}>
@@ -256,7 +275,12 @@ function GithubFilesInner(
             <Card size="small" className="surface">
               <div className="flex flex-col gap-3 md:flex-row md:items-end md:flex-wrap">
                 <div className="min-w-[180px] flex-1">
-                  <RepositorySelect repos={repos} loading={isLoadingRepos} value={selectedRepo} onChange={handleRepoSelect} />
+                  <RepositorySelect
+                    repos={repos}
+                    loading={isLoadingRepos}
+                    value={selectedRepo}
+                    onChange={handleRepoSelect}
+                  />
                 </div>
 
                 <div className="min-w-[180px] flex-1">
@@ -303,7 +327,9 @@ function GithubFilesInner(
                     disabled={isLoadingRepos || isLoadingBranches || isLoadingContent}
                     className="whitespace-nowrap"
                   >
-                    <ReloadOutlined className={`mr-2 ${isLoadingRepos || isLoadingBranches ? "animate-spin" : ""}`} />
+                    <ReloadOutlined
+                      className={`mr-2 ${isLoadingRepos || isLoadingBranches ? "animate-spin" : ""}`}
+                    />
                     Refresh
                   </Button>
                 </div>
@@ -318,7 +344,9 @@ function GithubFilesInner(
                     {selectedPaths.size > 0 && (
                       <>
                         <span className="mx-2">•</span>
-                        <span className="font-medium text-primary">{selectedPaths.size} fayl AI üçün seçilib</span>
+                        <span className="font-medium text-primary">
+                          {selectedPaths.size} fayl AI üçün seçilib
+                        </span>
                       </>
                     )}
                   </span>
