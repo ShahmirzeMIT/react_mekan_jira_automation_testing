@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { WebContainerFile } from "@/lib/buildFileSystemTree";
+import type { PreviewRunMode, WebContainerFile } from "@/lib/buildFileSystemTree";
+import { EMPTY_PREVIEW_ENV, type PreviewEnvConfig } from "@/lib/previewEnv";
 
 export type RunStatus = "idle" | "boot" | "install" | "build" | "live" | "error";
+
+interface PendingRun {
+  files: WebContainerFile[];
+  mode: PreviewRunMode;
+  envs: PreviewEnvConfig;
+}
 
 // Must stay under /wc-preview — that's the only path vite.config.ts
 // applies COOP/COEP to. Applying those headers anywhere else (or
@@ -26,12 +33,12 @@ export function useWebContainerRunner() {
   const channelIdRef = useRef<string>(
     typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
-      : `wc-${Date.now()}-${Math.random().toString(16).slice(2)}`
+      : `wc-${Date.now()}-${Math.random().toString(16).slice(2)}`,
   );
   const channelRef = useRef<BroadcastChannel | null>(null);
   const runnerWindowRef = useRef<Window | null>(null);
   const runnerReadyRef = useRef(false);
-  const pendingFilesRef = useRef<WebContainerFile[] | null>(null);
+  const pendingRunRef = useRef<PendingRun | null>(null);
   const mountedRef = useRef(true);
   // Hidden real <a> element — clicking it programmatically is treated
   // by browsers as closer to a genuine navigation than window.open(),
@@ -55,9 +62,9 @@ export function useWebContainerRunner() {
         case "wc:ready": {
           runnerReadyRef.current = true;
           setPopupBlocked(false);
-          if (pendingFilesRef.current) {
-            ch.postMessage({ type: "wc:run", files: pendingFilesRef.current });
-            pendingFilesRef.current = null;
+          if (pendingRunRef.current) {
+            ch.postMessage({ type: "wc:run", ...pendingRunRef.current });
+            pendingRunRef.current = null;
           }
           break;
         }
@@ -123,7 +130,7 @@ export function useWebContainerRunner() {
   const openRunner = useCallback(() => {
     ensureChannel();
     runnerReadyRef.current = false;
-    pendingFilesRef.current = null;
+    pendingRunRef.current = null;
     setPopupBlocked(false);
     setStatus("boot");
     setLog("");
@@ -167,7 +174,7 @@ export function useWebContainerRunner() {
     setStatus("error");
     setPopupBlocked(true);
     appendLog(
-      "\n! Runner pəncərəsi açıla bilmədi. Brauzerin ünvan zolağında pop-up blok işarəsinə bax və bu sayt üçün pop-up-lara icazə ver.\n"
+      "\n! Runner pəncərəsi açıla bilmədi. Brauzerin ünvan zolağında pop-up blok işarəsinə bax və bu sayt üçün pop-up-lara icazə ver.\n",
     );
   }, [appendLog, ensureChannel]);
 
@@ -179,15 +186,19 @@ export function useWebContainerRunner() {
   }, [openRunner]);
 
   const run = useCallback(
-    (files: WebContainerFile[]) => {
+    (
+      files: WebContainerFile[],
+      mode: PreviewRunMode = "auto",
+      envs: PreviewEnvConfig = EMPTY_PREVIEW_ENV,
+    ) => {
       const ch = ensureChannel();
       if (runnerReadyRef.current) {
-        ch.postMessage({ type: "wc:run", files });
+        ch.postMessage({ type: "wc:run", files, mode, envs });
       } else {
-        pendingFilesRef.current = files;
+        pendingRunRef.current = { files, mode, envs };
       }
     },
-    [ensureChannel]
+    [ensureChannel],
   );
 
   const navigate = useCallback((nextPath: string) => {
