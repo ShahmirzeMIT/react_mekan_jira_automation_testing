@@ -313,7 +313,7 @@ export default function TasksPage() {
         description={`Tasks: ${tasks.length} · Last synchronized: ${integrations.jiraLastSync}${jiraUserEmail ? ` · Jira User: ${jiraUserEmail}` : ""}`}
         actions={
           <div className="flex items-center gap-2">
-            {jiraAccessToken && (
+            {/* {jiraAccessToken && (
               <Button
                 size="sm"
                 variant="outline"
@@ -325,13 +325,9 @@ export default function TasksPage() {
               >
                 Log Jira Data
               </Button>
-            )}
+            )} */}
             <Dialog open={taskOpen} onOpenChange={setTaskOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm">
-                  <Plus className="size-4" /> New Task
-                </Button>
-              </DialogTrigger>
+          
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Create task</DialogTitle>
@@ -428,24 +424,7 @@ export default function TasksPage() {
             ))}
           </SelectContent>
         </Select>
-        <Select
-          value={filters.ai ?? "ALL"}
-          onValueChange={(v) =>
-            setFilters({
-              ...filters,
-              ...(v === "ALL" ? { ai: undefined as never } : { ai: v as "assisted" }),
-            })
-          }
-        >
-          <SelectTrigger className="h-9 w-36">
-            <SelectValue placeholder="AI" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Any AI state</SelectItem>
-            <SelectItem value="assisted">AI assisted</SelectItem>
-            <SelectItem value="not_assisted">Not assisted</SelectItem>
-          </SelectContent>
-        </Select>
+     
         <span className="ml-auto font-mono text-[11px] text-muted-foreground">
           {visible.length} / {tasks.length}
         </span>
@@ -468,9 +447,6 @@ export default function TasksPage() {
                   "Title",
                   "Status",
                   "Priority",
-                  "Assignee",
-                  "GitHub",
-                  "AI",
                   "Updated",
                   "Actions",
                 ].map((h) => (
@@ -498,13 +474,7 @@ export default function TasksPage() {
                   <td className="px-4 py-2.5">
                     <TaskPriorityBadge priority={t.priority} />
                   </td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{t.assignee.name}</td>
-                  <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                    {t.githubConnected ? "Connected" : "Not connected"}
-                  </td>
-                  <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                    {t.aiAssisted ? "Assisted" : "Not assisted"}
-                  </td>
+                 
                   <td className="px-4 py-2.5 font-mono text-[11px] text-muted-foreground">
                     {relativeTime(t.updatedAt)}
                   </td>
@@ -519,29 +489,7 @@ export default function TasksPage() {
                       >
                         <Pencil className="size-4" />
                       </Button>
-                      {t.active !== false ? (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => void setTaskActive(t, false)}
-                          disabled={saving}
-                          aria-label={`Deactivate ${t.key}`}
-                          title="Deactivate task"
-                        >
-                          <Square className="size-4" />
-                        </Button>
-                      ) : (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => void setTaskActive(t, true)}
-                          disabled={saving}
-                          aria-label={`Activate ${t.key}`}
-                          title="Activate task"
-                        >
-                          <Play className="size-4" />
-                        </Button>
-                      )}
+                   
                       <Button size="sm" variant="ghost" asChild>
                         <Link to={`/projects/${projectId}/tasks/${t.key}`}>Open</Link>
                       </Button>
