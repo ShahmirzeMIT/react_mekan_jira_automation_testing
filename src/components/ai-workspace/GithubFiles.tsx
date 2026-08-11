@@ -2,11 +2,9 @@
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
-import { ProjectRequiredState } from "@/components/common/States";
 import { ConnectionBadge } from "@/components/common/Badges";
 import { useAppStore } from "@/store/appStore";
 import { useAuth } from "@/hooks/useAuth";
-import { useParams } from "react-router-dom";
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { Space, Card } from "antd";
 import { ReloadOutlined, LoadingOutlined } from "@ant-design/icons";
@@ -42,7 +40,6 @@ function GithubFilesInner(
 ) {
   const { integrations } = useAppStore();
   const { user } = useAuth();
-  const { projectId } = useParams<{ projectId?: string }>();
 
   const [isLoadingContent, setIsLoadingContent] = useState(false);
 
@@ -77,10 +74,10 @@ function GithubFilesInner(
   const githubId = localStorage.getItem("devflow.github.id");
 
   useEffect(() => {
-    if (projectId && isConnected && user && githubId) {
+    if (isConnected && user && githubId) {
       fetchRepositories(githubId);
     }
-  }, [projectId, isConnected, user]);
+  }, [isConnected, user]);
 
   useEffect(() => {
     const pathsToFetch = Array.from(selectedPaths).filter((p) => !(p in fileContentCache));
@@ -245,8 +242,6 @@ function GithubFilesInner(
 
   const isConnectedCheck = integrations.githubConnected || isConnected;
 
-  if (!projectId) return <ProjectRequiredState pageName="GitHub files" />;
-
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
       <div className="shrink-0 px-3 pt-3">
@@ -261,7 +256,7 @@ function GithubFilesInner(
           }
           actions={
             !isConnectedCheck ? (
-              <Button size="sm" onClick={() => connectGithub(projectId)}>
+              <Button size="sm" onClick={() => connectGithub()}>
                 Connect GitHub
               </Button>
             ) : undefined

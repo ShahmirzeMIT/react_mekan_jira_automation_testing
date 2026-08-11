@@ -29,7 +29,7 @@ interface IntegrationState {
   /** True after the signed-in user's Jira connection has been checked in Firestore. */
   jiraConnectionChecked: boolean;
   githubConnected: boolean;
-  jiraProject: string | null;
+  jiraWorkspace: string | null;
   githubRepository: string | null;
   jiraLastSync: string | null;
   githubLastSync: string | null;
@@ -52,7 +52,7 @@ const THEME_STORAGE_KEY = "devflow.theme";
 const SIDEBAR_STORAGE_KEY = "devflow.sidebar-collapsed";
 
 type JiraConnection = {
-  jiraProject: string | null;
+  jiraWorkspace: string | null;
   jiraLastSync: string | null;
 };
 
@@ -71,7 +71,7 @@ async function findJiraConnection(email: string): Promise<JiraConnection | null>
 
   const data = document.data();
   return {
-    jiraProject: typeof data["jiraDisplayName"] === "string" ? data["jiraDisplayName"] : null,
+    jiraWorkspace: typeof data["jiraDisplayName"] === "string" ? data["jiraDisplayName"] : null,
     jiraLastSync: typeof data["lastSyncAt"] === "string" ? data["lastSyncAt"] : null,
   };
 }
@@ -106,7 +106,7 @@ interface AppStore {
   setCommandOpen: (open: boolean) => void;
   // integrations
   integrations: IntegrationState;
-  connectJira: (project: string) => void;
+  connectJira: (workspace: string) => void;
   disconnectJira: () => void;
   connectGithub: (repository: string) => void;
   disconnectGithub: () => void;
@@ -160,7 +160,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     jiraConnected: false,
     jiraConnectionChecked: false,
     githubConnected: false,
-    jiraProject: null,
+    jiraWorkspace: null,
     githubRepository: null,
     jiraLastSync: null,
     githubLastSync: null,
@@ -242,7 +242,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             ...current,
             jiraConnected: Boolean(jiraConnection),
             jiraConnectionChecked: true,
-            jiraProject: jiraConnection?.jiraProject ?? null,
+            jiraWorkspace: jiraConnection?.jiraWorkspace ?? null,
             jiraLastSync: jiraConnection?.jiraLastSync ?? null,
           }));
           setLoading(false);
@@ -343,7 +343,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             jiraConnected: false,
             jiraConnectionChecked: false,
             githubConnected: false,
-            jiraProject: null,
+            jiraWorkspace: null,
             githubRepository: null,
             jiraLastSync: null,
             githubLastSync: null,
@@ -359,18 +359,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       commandOpen,
       setCommandOpen,
       integrations,
-      connectJira: (project) =>
+      connectJira: (workspace) =>
         setIntegrations((s) => ({
           ...s,
           jiraConnected: true,
-          jiraProject: project,
+          jiraWorkspace: workspace,
           jiraLastSync: "Just now",
         })),
       disconnectJira: () =>
         setIntegrations((s) => ({
           ...s,
           jiraConnected: false,
-          jiraProject: null,
+          jiraWorkspace: null,
           jiraLastSync: null,
         })),
       connectGithub: (repository) =>

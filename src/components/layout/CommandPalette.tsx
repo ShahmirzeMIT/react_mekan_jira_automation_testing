@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   CommandDialog,
   CommandEmpty,
@@ -13,19 +13,14 @@ import { jiraService } from "@/services/jiraService";
 export function CommandPalette() {
   const { commandOpen, setCommandOpen, signOut, connectGithub, idToken, integrations } =
     useAppStore();
-  const params = useParams<{ projectId?: string }>();
-  const projectId = params.projectId;
   const navigate = useNavigate();
 
   const go =
-    (to: string, withParams = true) =>
+    (to: string) =>
     () => {
       setCommandOpen(false);
-      navigate(withParams ? to.replace("$projectId", projectId ?? "") : to);
+      navigate(to);
     };
-
-  const projectRoute = (section: string) =>
-    projectId ? `/projects/$projectId/${section}` : `/${section}`;
 
   return (
     <CommandDialog open={commandOpen} onOpenChange={setCommandOpen}>
@@ -33,12 +28,10 @@ export function CommandPalette() {
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
         <CommandGroup heading="Navigation">
-          <CommandItem onSelect={go(projectRoute("overview"))}>Go to Overview</CommandItem>
-          <CommandItem onSelect={go(projectRoute("tasks"))}>Go to Tasks</CommandItem>
-          <CommandItem onSelect={go(projectRoute("ai-workspace"))}>Go to AI Workspace</CommandItem>
-          <CommandItem onSelect={go(projectRoute("github"))}>Go to GitHub</CommandItem>
-          <CommandItem onSelect={go(projectRoute("activity"))}>Go to Activity</CommandItem>
-          <CommandItem onSelect={go("/projects", false)}>Go to Projects</CommandItem>
+          <CommandItem onSelect={go("/tasks")}>Go to Tasks</CommandItem>
+          <CommandItem onSelect={go("/ai-workspace")}>Go to AI Workspace</CommandItem>
+          <CommandItem onSelect={go("/github")}>Go to GitHub</CommandItem>
+          <CommandItem onSelect={go("/activity")}>Go to Activity</CommandItem>
         </CommandGroup>
         <CommandGroup heading="Actions">
           {integrations.jiraConnectionChecked && !integrations.jiraConnected && (
@@ -53,14 +46,14 @@ export function CommandPalette() {
           )}
           <CommandItem
             onSelect={() => {
-              connectGithub("devflow-ai");
+              connectGithub("GitHub");
               setCommandOpen(false);
             }}
           >
             Connect GitHub
           </CommandItem>
-          <CommandItem onSelect={go("/profile", false)}>Open Profile</CommandItem>
-          <CommandItem onSelect={go("/settings", false)}>Open Settings</CommandItem>
+          <CommandItem onSelect={go("/profile")}>Open Profile</CommandItem>
+          <CommandItem onSelect={go("/settings")}>Open Settings</CommandItem>
           <CommandItem
             onSelect={() => {
               setCommandOpen(false);

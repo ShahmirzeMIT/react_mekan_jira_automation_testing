@@ -114,13 +114,12 @@ import { TaskPriorityBadge } from "./TaskPriorityBadge";
 
 interface TaskCardProps {
   task: Task;
-  projectId: string;
 }
 
-export const TaskCard = memo(function TaskCard({ task, projectId }: TaskCardProps) {
+export const TaskCard = memo(function TaskCard({ task }: TaskCardProps) {
   return (
     <Link
-      to={\`/projects/\${projectId}/tasks/\${task.key}\`}
+      to={\`/tasks/\${task.key}\`}
       className="surface block p-4 transition-colors hover:border-primary/50"
     >
       <div className="flex items-center justify-between">
@@ -137,10 +136,10 @@ export const TaskCard = memo(function TaskCard({ task, projectId }: TaskCardProp
 const useTasks = `import { useEffect, useState } from "react";
 import { taskService } from "@/services/taskService";
 
-export function useTasks(projectId: string, enabled = true) {
+export function useTasks(enabled = true) {
   return useQuery({
-    queryKey: ["tasks", projectId],
-    queryFn: () => taskService.getTasks(projectId),
+    queryKey: ["tasks"],
+    queryFn: () => taskService.getTasks(),
     staleTime: 30_000,
     enabled,
   });
@@ -156,10 +155,10 @@ export function LoginPage() {
 
   async function handleGoogle() {
     await signIn();
-    navigate({ to: "/projects" });
+    navigate({ to: "/tasks" });
   }
 
-  if (isAuthenticated) navigate({ to: "/projects" });
+  if (isAuthenticated) navigate({ to: "/tasks" });
 
   return <button onClick={handleGoogle}>Continue with Google</button>;
 }

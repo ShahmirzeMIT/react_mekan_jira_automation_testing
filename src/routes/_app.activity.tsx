@@ -1,7 +1,5 @@
 import { Activity, Bot, GitBranch, ListChecks, RefreshCcw, TestTube2 } from "lucide-react";
-import { useParams } from "react-router-dom";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { ProjectRequiredState } from "@/components/common/States";
 import { useAppStore } from "@/store/appStore";
 import type { ActivityKind } from "@/types";
 
@@ -15,10 +13,7 @@ const icons: Record<ActivityKind, typeof Activity> = {
 };
 
 export default function ActivityPage() {
-  const { projectId } = useParams<{ projectId?: string }>();
   const { activities } = useAppStore();
-
-  if (!projectId) return <ProjectRequiredState pageName="Activity" />;
 
   return (
     <div className="mx-auto max-w-3xl">

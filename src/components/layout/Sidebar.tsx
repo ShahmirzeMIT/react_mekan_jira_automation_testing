@@ -1,12 +1,9 @@
-import { Link, NavLink, useParams } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import {
   Activity,
   ChevronsLeft,
   ChevronsRight,
-  FolderKanban,
   Github,
-  LayoutDashboard,
-  Link2,
   ListChecks,
   LogOut,
   Settings,
@@ -23,7 +20,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ProjectSelector } from "@/components/layout/ProjectSelector";
 
 interface Item {
   label: string;
@@ -33,31 +29,20 @@ interface Item {
 
 export function Sidebar() {
   const { sidebarCollapsed, toggleSidebar, user, signOut } = useAppStore();
-  const params = useParams<{ projectId?: string }>();
-  const projectId = params.projectId;
-  const projectPath = (section: string) =>
-    projectId ? `/projects/${projectId}/${section}` : `/${section}`;
 
   const groups: { title: string; items: Item[] }[] = [
     {
-      title: "Overview",
-      items: [{ label: "Overview", icon: LayoutDashboard, to: projectPath("overview") }],
-    },
-    {
       title: "Development",
       items: [
-        { label: "Tasks", icon: ListChecks, to: projectPath("tasks") },
+        { label: "Tasks", icon: ListChecks, to: "/tasks" },
 
-        { label: "AI Workspace", icon: Sparkles, to: projectPath("ai-workspace") },
-        { label: "GitHub", icon: Github, to: projectPath("github") },
+        { label: "AI Workspace", icon: Sparkles, to: "/ai-workspace" },
+        { label: "GitHub", icon: Github, to: "/github" },
       ],
     },
     {
       title: "Insights",
-      items: [
-        { label: "Activity", icon: Activity, to: projectPath("activity") },
-        { label: "Projects", icon: FolderKanban, to: "/projects" },
-      ],
+      items: [{ label: "Activity", icon: Activity, to: "/activity" }],
     },
     {
       title: "Account",
@@ -83,12 +68,6 @@ export function Sidebar() {
           <span className="truncate text-sm font-semibold tracking-tight">DevFlow AI</span>
         )}
       </div>
-
-      {!sidebarCollapsed && (
-        <div className="border-b border-sidebar-border p-3">
-          <ProjectSelector projectId={projectId} />
-        </div>
-      )}
 
       <nav className="flex-1 overflow-y-auto px-2 py-3" aria-label="Main">
         {groups.map((group) => (

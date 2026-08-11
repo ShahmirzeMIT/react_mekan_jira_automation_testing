@@ -21,12 +21,12 @@ export interface TaskFilters {
 }
 
 export const taskService = {
-  async getTasks(projectId: string): Promise<Task[]> {
-    return apply(await jiraService.getTasks(projectId));
+  async getTasks(): Promise<Task[]> {
+    return apply(await jiraService.getTasks());
   },
 
-  async getTask(projectId: string, key: string): Promise<Task | undefined> {
-    return (await taskService.getTasks(projectId)).find((t) => t.key === key);
+  async getTask(key: string): Promise<Task | undefined> {
+    return (await taskService.getTasks()).find((t) => t.key === key);
   },
 
   async createTask(input: {
@@ -35,7 +35,6 @@ export const taskService = {
     priority: TaskPriority;
     assignee: string;
     labels: string[];
-    projectId: string;
   }): Promise<Task> {
     await delay(700);
     const seq = 143 + created.length;
@@ -49,8 +48,7 @@ export const taskService = {
       status: "TODO",
       priority: input.priority,
       assignee: { id: "u-1", name: input.assignee, email: "shahmir@devflow.ai", role: "Developer" },
-      projectId: input.projectId,
-      jiraProject: "DEV",
+      jiraKey: "DEV",
       issueType: "Task",
       labels: input.labels,
       relatedFiles: [],

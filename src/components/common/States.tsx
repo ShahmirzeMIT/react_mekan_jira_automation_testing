@@ -37,17 +37,6 @@ export function EmptyState({
   );
 }
 
-export function ProjectRequiredState({ pageName = "This page" }: { pageName?: string }) {
-  return (
-    <div className="mx-auto max-w-3xl">
-      <EmptyState
-        title="Select a project first"
-        description={`${pageName} stays empty until a project is selected.`}
-      />
-    </div>
-  );
-}
-
 export function ErrorState({
   title,
   description,

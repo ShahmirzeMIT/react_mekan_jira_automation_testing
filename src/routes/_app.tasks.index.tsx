@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ListChecks, Pencil, Play, Plus, Power, Square } from "lucide-react";
 import { toast } from "sonner";
@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { EmptyState, ListSkeleton, ProjectRequiredState } from "@/components/common/States";
+import { EmptyState, ListSkeleton } from "@/components/common/States";
 import { ConnectionBadge, TaskPriorityBadge, TaskStatusBadge } from "@/components/common/Badges";
 import { useAppStore } from "@/store/appStore";
 import { taskService, type TaskFilters } from "@/services/taskService";
@@ -34,7 +34,6 @@ import { db } from "@/config/firebase";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function TasksPage() {
-  const { projectId } = useParams<{ projectId?: string }>();
   const { integrations, idToken, logActivity } = useAppStore();
   const [filters, setFilters] = useState<TaskFilters>({ search: "" });
   const [connectOpen, setConnectOpen] = useState(false);
@@ -61,7 +60,7 @@ export default function TasksPage() {
   const { user, loading: authLoading } = useAuth();
 
   const refetch = useCallback(async () => {
-    if (!projectId || !jiraAccessToken || !jiraCloudId || !jiraAccountId) {
+    if (!jiraAccessToken || !jiraCloudId || !jiraAccountId) {
       setTasks([]);
       return;
     }
@@ -69,7 +68,7 @@ export default function TasksPage() {
     setIsLoading(true);
     try {
       setTasks(
-        await jiraService.getCanvasTasks(projectId, {
+        await jiraService.getCanvasTasks({
           accessToken: jiraAccessToken,
           cloudId: jiraCloudId,
           accountId: jiraAccountId,
@@ -82,7 +81,7 @@ export default function TasksPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [jiraAccessToken, jiraCloudId, jiraAccountId, projectId]);
+  }, [jiraAccessToken, jiraCloudId, jiraAccountId]);
 
   useEffect(() => {
     void refetch();
@@ -91,15 +90,6 @@ export default function TasksPage() {
   // Fetch Jira user data from Firestore
   useEffect(() => {
     const fetchJiraUserData = async () => {
-      if (!projectId) {
-        setJiraAccessToken(null);
-        setJiraCloudId(null);
-        setJiraAccountId(null);
-        setJiraUserEmail(null);
-        setJiraUserDataLoading(false);
-        return;
-      }
-
       setJiraUserDataLoading(true);
       if (!user?.email) {
         setJiraUserDataLoading(false);
@@ -113,8 +103,6 @@ export default function TasksPage() {
 
       try {
         const snapshot = await getDocs(collection(db, "jira_users"));
-        console.log(user.email, "user.email");
-
         const normalizedUserEmail = user.email.trim().toLowerCase();
         console.log(normalizedUserEmail, "normalizedUserEmail");
         const jiraUsers: Array<Record<string, unknown> & { id: string }> = snapshot.docs.map(
@@ -153,7 +141,6 @@ export default function TasksPage() {
           );
         });
 
-        console.log("Jira connection found:", Boolean(jiraUser), "document:", jiraUser?.id);
 
         if (jiraUser) {
           const integration = jiraUser["jiraIntegration"] as Record<string, unknown> | undefined;
@@ -182,22 +169,13 @@ export default function TasksPage() {
     };
 
     fetchJiraUserData();
-  }, [projectId, user?.email, user?.uid]);
+  }, [user?.email, user?.uid]);
 
   // Log Jira data whenever it changes
-  useEffect(() => {
-    if (jiraAccessToken) {
-      console.log("Current Jira Access Token:", jiraAccessToken);
-      console.log("Current Jira User Email:", jiraUserEmail);
-    }
-  }, [jiraAccessToken, jiraUserEmail]);
-
-  if (!projectId) return <ProjectRequiredState pageName="Tasks" />;
 
   async function handleConnect() {
     setConnecting(true);
     try {
-      sessionStorage.setItem("devflow.jira.return-project", projectId);
       const authorizationUrl = await jiraService.beginOAuth(idToken);
       window.location.assign(authorizationUrl);
     } catch (error) {
@@ -252,7 +230,7 @@ export default function TasksPage() {
       toast.error("Title is required.");
       return;
     }
-    await taskService.createTask({ ...newTask, assignee: "Shahmir", labels: [], projectId });
+    await taskService.createTask({ ...newTask, assignee: "Shahmir", labels: [] });
     await refetch();
     logActivity("task", `Task created: ${newTask.title}`);
     toast.success("Task created.");
@@ -302,7 +280,7 @@ export default function TasksPage() {
         title="Tasks"
         badge={
           <div className="flex items-center gap-2">
-            <ConnectionBadge label={`Jira ${integrations.jiraProject}`} connected />
+            <ConnectionBadge label={integrations.jiraWorkspace ?? "Jira"} connected />
             {jiraAccessToken && (
               <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
                 ✓ Jira Connected
@@ -313,7 +291,7 @@ export default function TasksPage() {
         description={`Tasks: ${tasks.length} · Last synchronized: ${integrations.jiraLastSync}${jiraUserEmail ? ` · Jira User: ${jiraUserEmail}` : ""}`}
         actions={
           <div className="flex items-center gap-2">
-            {jiraAccessToken && (
+            {/* {jiraAccessToken && (
               <Button
                 size="sm"
                 variant="outline"
@@ -325,13 +303,9 @@ export default function TasksPage() {
               >
                 Log Jira Data
               </Button>
-            )}
+            )} */}
             <Dialog open={taskOpen} onOpenChange={setTaskOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm">
-                  <Plus className="size-4" /> New Task
-                </Button>
-              </DialogTrigger>
+          
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Create task</DialogTitle>
@@ -428,24 +402,7 @@ export default function TasksPage() {
             ))}
           </SelectContent>
         </Select>
-        <Select
-          value={filters.ai ?? "ALL"}
-          onValueChange={(v) =>
-            setFilters({
-              ...filters,
-              ...(v === "ALL" ? { ai: undefined as never } : { ai: v as "assisted" }),
-            })
-          }
-        >
-          <SelectTrigger className="h-9 w-36">
-            <SelectValue placeholder="AI" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Any AI state</SelectItem>
-            <SelectItem value="assisted">AI assisted</SelectItem>
-            <SelectItem value="not_assisted">Not assisted</SelectItem>
-          </SelectContent>
-        </Select>
+     
         <span className="ml-auto font-mono text-[11px] text-muted-foreground">
           {visible.length} / {tasks.length}
         </span>
@@ -468,9 +425,6 @@ export default function TasksPage() {
                   "Title",
                   "Status",
                   "Priority",
-                  "Assignee",
-                  "GitHub",
-                  "AI",
                   "Updated",
                   "Actions",
                 ].map((h) => (
@@ -485,10 +439,7 @@ export default function TasksPage() {
                 <tr key={t.key} className="border-t border-border hover:bg-muted/40">
                   <td className="px-4 py-2.5 font-mono text-xs">{t.key}</td>
                   <td className="px-4 py-2.5">
-                    <Link
-                      to={`/projects/${projectId}/tasks/${t.key}`}
-                      className="hover:text-primary"
-                    >
+                    <Link to={`/tasks/${t.key}`} className="hover:text-primary">
                       {t.title}
                     </Link>
                   </td>
@@ -498,13 +449,7 @@ export default function TasksPage() {
                   <td className="px-4 py-2.5">
                     <TaskPriorityBadge priority={t.priority} />
                   </td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{t.assignee.name}</td>
-                  <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                    {t.githubConnected ? "Connected" : "Not connected"}
-                  </td>
-                  <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                    {t.aiAssisted ? "Assisted" : "Not assisted"}
-                  </td>
+                 
                   <td className="px-4 py-2.5 font-mono text-[11px] text-muted-foreground">
                     {relativeTime(t.updatedAt)}
                   </td>
@@ -519,31 +464,9 @@ export default function TasksPage() {
                       >
                         <Pencil className="size-4" />
                       </Button>
-                      {t.active !== false ? (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => void setTaskActive(t, false)}
-                          disabled={saving}
-                          aria-label={`Deactivate ${t.key}`}
-                          title="Deactivate task"
-                        >
-                          <Square className="size-4" />
-                        </Button>
-                      ) : (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => void setTaskActive(t, true)}
-                          disabled={saving}
-                          aria-label={`Activate ${t.key}`}
-                          title="Activate task"
-                        >
-                          <Play className="size-4" />
-                        </Button>
-                      )}
+                   
                       <Button size="sm" variant="ghost" asChild>
-                        <Link to={`/projects/${projectId}/tasks/${t.key}`}>Open</Link>
+                        <Link to={`/tasks/${t.key}`}>Open</Link>
                       </Button>
                     </div>
                   </td>

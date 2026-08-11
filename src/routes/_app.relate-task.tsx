@@ -1,4 +1,3 @@
-import { useParams } from "react-router-dom";
 import { useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -11,18 +10,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ProjectRequiredState } from "@/components/common/States";
 import { useRepositories, useRepositoryFiles, useTasks } from "@/hooks/useAppData";
 import { useAppStore } from "@/store/appStore";
 import { taskService } from "@/services/taskService";
 
 export default function RelateTaskPage() {
-  const { projectId } = useParams<{ projectId?: string }>();
   const { integrations, ai, selectFile, removeFile, setTask, logActivity } = useAppStore();
-  const hasProject = Boolean(projectId);
-  const { data: tasks = [] } = useTasks(projectId, hasProject && integrations.jiraConnected);
-  const { data: repos = [] } = useRepositories(hasProject);
-  const { data: filesData } = useRepositoryFiles(hasProject);
+  const { data: tasks = [] } = useTasks(integrations.jiraConnected);
+  const { data: repos = [] } = useRepositories();
+  const { data: filesData } = useRepositoryFiles();
   const [repoId, setRepoId] = useState("r-1");
   const [branch, setBranch] = useState("feature/github-auth");
   const [contextReady, setContextReady] = useState(false);
@@ -31,9 +27,6 @@ export default function RelateTaskPage() {
   const files = filesData?.files ?? [];
   const taskKey = ai.selectedTaskKey ?? "";
   const task = tasks.find((t) => t.key === taskKey);
-
-  if (!projectId) return <ProjectRequiredState pageName="Relate Task" />;
-
   async function send() {
     if (!taskKey) {
       toast.error("Please select a Jira task.");
@@ -160,7 +153,7 @@ export default function RelateTaskPage() {
                 <li>Git History ✓</li>
               </ul>
               <Button className="mt-4 w-full" size="sm" asChild>
-                <a href={`/projects/${projectId}/ai-workspace`}>Analyze with AI</a>
+                <a href="/ai-workspace">Analyze with AI</a>
               </Button>
             </section>
           )}

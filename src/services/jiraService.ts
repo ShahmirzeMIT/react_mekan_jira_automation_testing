@@ -53,11 +53,6 @@ export const jiraService = {
     return { connected: false };
   },
 
-  async getProjects() {
-    await delay(300);
-    return [{ id: "10000", key: "DEV", name: "Developer Productivity Platform" }];
-  },
-
   async getRawIssues(): Promise<JiraIssuesResponse> {
     await delay(600);
     return mockJiraIssuesResponse;
@@ -71,20 +66,20 @@ export const jiraService = {
     });
   },
 
-  async getCanvasTasks(projectId: string, request: CanvasIssuesRequest): Promise<Task[]> {
+  async getCanvasTasks(request: CanvasIssuesRequest): Promise<Task[]> {
     const response = await jiraService.getCanvasIssues(request);
     if (!response.success || !response.data?.success) throw new Error(response.message || "Unable to load Jira issues.");
-    return (response.data.issues ?? []).map((issue) => mapIssueToTask(issue, projectId));
+    return (response.data.issues ?? []).map((issue) => mapIssueToTask(issue));
   },
 
-  async getTasks(projectId: string): Promise<Task[]> {
+  async getTasks(): Promise<Task[]> {
     const response = await jiraService.getRawIssues();
     if (!response.success) throw new Error(response.message);
-    return response.data.issues.map((issue) => mapIssueToTask(issue, projectId));
+    return response.data.issues.map((issue) => mapIssueToTask(issue));
   },
 
-  async getTask(key: string, projectId: string): Promise<Task | undefined> {
-    const tasks = await jiraService.getTasks(projectId);
+  async getTask(key: string): Promise<Task | undefined> {
+    const tasks = await jiraService.getTasks();
     return tasks.find((t) => t.key === key);
   },
 

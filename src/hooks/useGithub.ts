@@ -83,7 +83,7 @@ export const useGithub = () => {
   };
 
   // Connect GitHub
-  const connectGithub = async (projectId: string) => {
+  const connectGithub = async () => {
     if (!user) {
       toast.error('Sign in before connecting GitHub.');
       return;
@@ -91,7 +91,6 @@ export const useGithub = () => {
 
     try {
       sessionStorage.setItem('devflow.github.user-id', user.uid);
-      sessionStorage.setItem('devflow.github.return-project', projectId);
 
       localStorage.setItem('devflow.github.id', 'github_connected');
       setIsConnected(true);

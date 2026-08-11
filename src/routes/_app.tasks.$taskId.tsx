@@ -16,7 +16,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { ConnectionBadge, TaskPriorityBadge, TaskStatusBadge } from "@/components/common/Badges";
-import { EmptyState, ListSkeleton, ProjectRequiredState } from "@/components/common/States";
+import { EmptyState, ListSkeleton } from "@/components/common/States";
 import { useTask } from "@/hooks/useAppData";
 import { taskService } from "@/services/taskService";
 import { useAppStore } from "@/store/appStore";
@@ -33,29 +33,29 @@ const workflow = [
 ];
 
 export default function TaskDetailsPage() {
-  const { projectId, taskId } = useParams<{ projectId?: string; taskId?: string }>();
-  const { data: task, isLoading, refetch } = useTask(projectId, taskId);
+  const { taskId } = useParams<{ taskId?: string }>();
+  const { data: task, isLoading, refetch } = useTask(taskId);
   const { logActivity, setTask } = useAppStore();
   const [comment, setComment] = useState("");
 
-  if (!projectId) return <ProjectRequiredState pageName="Task details" />;
   if (!taskId)
     return (
-      <EmptyState title="Task not found" description="Select a task from the current project." />
+      <EmptyState title="Task not found" description="Select a task from the task list." />
     );
   if (isLoading) return <ListSkeleton rows={6} />;
   if (!task)
     return (
       <EmptyState
         title="Task not found"
-        description="This task is not part of the current project."
+        description="This task could not be found."
       />
     );
+  const taskKey = taskId;
 
   async function complete() {
-    await taskService.completeTask(taskId);
+    await taskService.completeTask(taskKey);
     await refetch();
-    logActivity("task", `Task ${taskId} completed`, { taskKey: taskId });
+    logActivity("task", `Task ${taskKey} completed`, { taskKey });
     toast.success("Task completed successfully.");
     setTimeout(() => toast.success("Jira synchronized"), 700);
   }
@@ -67,14 +67,14 @@ export default function TaskDetailsPage() {
       <PageHeader
         title={`${task.key} · ${task.title}`}
         badge={<TaskStatusBadge status={task.status} />}
-        description={`${task.issueType} · ${task.jiraProject} · updated ${task.updatedAt.slice(0, 10)}`}
+        description={`${task.issueType} · ${task.jiraKey} · updated ${task.updatedAt.slice(0, 10)}`}
         actions={
           <>
             <Button size="sm" variant="secondary" asChild>
-              <Link to={`/projects/${projectId}/relate-task`}>Relate Files</Link>
+              <Link to="/relate-task">Relate Files</Link>
             </Button>
             <Button size="sm" variant="secondary" onClick={() => setTask(task.key)} asChild>
-              <Link to={`/projects/${projectId}/ai-workspace`}>Ask AI</Link>
+              <Link to="/ai-workspace">Ask AI</Link>
             </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>

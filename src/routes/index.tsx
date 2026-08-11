@@ -8,7 +8,7 @@ export default function Index() {
   const navigate = useNavigate();
   useEffect(() => {
     if (isLoading) return;
-    navigate(isAuthenticated ? "/projects" : "/login", { replace: true });
+    navigate(isAuthenticated ? "/tasks" : "/login", { replace: true });
   }, [isLoading, isAuthenticated, navigate]);
   return <FullScreenLoader label="Starting DevFlow AI" />;
 }
