@@ -2,6 +2,8 @@ import { mockJiraIssuesResponse } from "@/mock/jiraIssues";
 import type { JiraIssuesResponse, Task, TaskStatus } from "@/types";
 import { delay, mapIssueToTask } from "@/utils";
 import { apiRequest } from "@/services/apiClient";
+import { db } from "@/config/firebase";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
 interface JiraOAuthStartResponse {
   success: boolean;
@@ -23,6 +25,76 @@ interface CanvasIssuesRequest {
   accessToken: string;
   cloudId: string;
   accountId: string;
+}
+
+const CANVAS_ISSUES_COLLECTION = "jira_canvas_issues";
+
+function sortForSignature(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortForSignature);
+  if (!value || typeof value !== "object") return value;
+
+  return Object.keys(value)
+    .sort()
+    .reduce<Record<string, unknown>>((acc, key) => {
+      acc[key] = sortForSignature((value as Record<string, unknown>)[key]);
+      return acc;
+    }, {});
+}
+
+function stableSignature(value: unknown): string {
+  const text = JSON.stringify(sortForSignature(value));
+  let hash = 5381;
+
+  for (let index = 0; index < text.length; index += 1) {
+    hash = (hash * 33) ^ text.charCodeAt(index);
+  }
+
+  return (hash >>> 0).toString(36);
+}
+
+function canvasIssueDocId(cloudId: string, accountId: string, issueKey: string): string {
+  return [cloudId, accountId, issueKey]
+    .join("_")
+    .replace(/[^A-Za-z0-9_-]/g, "_")
+    .slice(0, 1_400);
+}
+
+async function syncCanvasIssuesToFirestore(
+  response: JiraIssuesResponse,
+  { cloudId, accountId }: CanvasIssuesRequest,
+): Promise<void> {
+  if (!db || !response.success || !response.data?.success) return;
+
+  const issues = response.data.issues ?? [];
+  await Promise.all(
+    issues.map(async (issue) => {
+      const issueSignature = stableSignature(issue);
+      const issueRef = doc(
+        db,
+        CANVAS_ISSUES_COLLECTION,
+        canvasIssueDocId(cloudId, accountId, issue.key),
+      );
+      const snapshot = await getDoc(issueRef);
+
+      if (snapshot.exists() && snapshot.data()["issueSignature"] === issueSignature) {
+        return;
+      }
+
+      await setDoc(
+        issueRef,
+        {
+          accountId,
+          cloudId,
+          issue,
+          issueId: issue.id,
+          issueKey: issue.key,
+          issueSignature,
+          syncedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }),
+  );
 }
 
 export const jiraService = {
@@ -58,12 +130,21 @@ export const jiraService = {
     return mockJiraIssuesResponse;
   },
 
-  async getCanvasIssues({ accessToken, cloudId, accountId }: CanvasIssuesRequest): Promise<JiraIssuesResponse> {
-    return apiRequest<JiraIssuesResponse>("/canvas/jira/issues", {
+  async getCanvasIssues(request: CanvasIssuesRequest): Promise<JiraIssuesResponse> {
+    const { accessToken, cloudId, accountId } = request;
+    const response = await apiRequest<JiraIssuesResponse>("/canvas/jira/issues", {
       method: "POST",
       token: accessToken,
       body: JSON.stringify({ cloudId, accountId }),
     });
+
+    try {
+      await syncCanvasIssuesToFirestore(response, request);
+    } catch (error) {
+      console.error("Unable to sync Jira canvas issues to Firestore:", error);
+    }
+
+    return response;
   },
 
   async getCanvasTasks(request: CanvasIssuesRequest): Promise<Task[]> {
