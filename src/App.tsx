@@ -16,6 +16,7 @@ import Index from "@/routes/index";
 import LoginPage from "@/routes/login";
 import JiraCallbackPage from "@/routes/jira-callback";
 import AcceptGithubPage from "@/routes/_app.accept.github";
+import WcRunnerPage from "./routes/_app.wcrunner";
 
 function NotFound() {
   return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">Page not found.</div>;
@@ -38,6 +39,7 @@ export function App() {
           <Route path="/projects/:projectId/github" element={<GithubPage />} />
           <Route path="/projects/:projectId/activity" element={<ActivityPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/wc-preview/runner" element={<WcRunnerPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
         <Route path="*" element={<NotFound />} />

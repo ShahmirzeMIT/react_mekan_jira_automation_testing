@@ -1,47 +1,104 @@
-// src/lib/fetchAllFileContents.ts
-import { extractFileContent } from "@/lib/extractFileContent";
 import type { WebContainerFile } from "@/lib/buildFileSystemTree";
-import type { RepoFileEntry } from "@/components/github/RepoFileTree";
+import { isBinaryPath } from "@/lib/buildFileSystemTree";
 
-const SKIP_PATTERN = /\.(png|jpe?g|gif|svg|ico|webp|woff2?|ttf|eot|lock)$/i;
-const MAX_FILES = 400;
-const CONCURRENCY = 6;
+export interface RepoFileEntryLike {
+  path: string;
+  type?: string;
+  size?: number;
+}
 
-type FetchFileContentFn = (
+type FetchFileContent = (repo: string, branch: string, path: string) => Promise<string>;
+
+const MAX_FILE_SIZE = 5_000_000; // 5MB safety cap — raise if you have larger assets
+const CONCURRENCY = 8;
+
+function arrayBufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+/**
+ * Fetches a binary asset directly from raw.githubusercontent.com as raw
+ * bytes and base64-encodes it. Works without auth for public repos.
+ * Returns null on any failure (private repo, 404, network error) so the
+ * caller can fall back to `fetchFileContent`.
+ */
+async function fetchBinaryFromRawGithub(
   repo: string,
   branch: string,
   path: string
-) => Promise<unknown>;
+): Promise<string | null> {
+  try {
+    const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+    const url = `https://raw.githubusercontent.com/${repo}/${branch}/${encodedPath}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const buf = await res.arrayBuffer();
+    return arrayBufferToBase64(buf);
+  } catch {
+    return null;
+  }
+}
 
 /**
- * repoFiles (from fetchRepoContent) only carries paths/structure — the actual
- * text is fetched per-file lazily in the UI. Before we can mount anything in
- * WebContainer we need *every* file's content, so this fans the same
- * fetchFileContent call out across all files with a small concurrency limit.
+ * Fetches content for every file in `entries` and returns them ready
+ * for buildFileSystemTree(). Deliberately does NOT filter by extension
+ * — dropping any file here (images, fonts, etc.) is exactly what causes
+ * Vite's "Failed to resolve import" errors for asset imports.
+ *
+ * Binary files (images, fonts, audio, etc.) are fetched as raw bytes and
+ * base64-encoded so buildFileSystemTree can mount them correctly. Text
+ * files go through the existing `fetchFileContent` callback unchanged.
  */
 export async function fetchAllFileContents(
-  entries: RepoFileEntry[],
+  entries: RepoFileEntryLike[],
   repo: string,
   branch: string,
-  fetchFileContent: FetchFileContentFn
+  fetchFileContent: FetchFileContent
 ): Promise<WebContainerFile[]> {
-  const targets = entries
-    // RepoFileEntry may or may not carry a `type` field depending on your
-    // backend — this drops obvious non-files without breaking if it's absent.
-    .filter((e: any) => e.type !== "dir" && e.type !== "directory" && !SKIP_PATTERN.test(e.path))
-    .slice(0, MAX_FILES);
-
+  const wanted = entries.filter((e) => (e.size ?? 0) < MAX_FILE_SIZE);
   const results: WebContainerFile[] = [];
-  let cursor = 0;
+  const failed: string[] = [];
 
+  let i = 0;
   async function worker() {
-    while (cursor < targets.length) {
-      const entry = targets[cursor++];
+    while (i < wanted.length) {
+      const entry = wanted[i++];
+      const binary = isBinaryPath(entry.path);
+
       try {
-        const raw = await fetchFileContent(repo, branch, entry.path);
-        const content = extractFileContent(raw);
-        if (content) results.push({ path: entry.path, content });
+        if (binary) {
+          // Try a direct raw-content fetch first — this is what
+          // actually fixes corrupted images, since it gets real bytes
+          // instead of routing through a text-decoding fetch fn.
+          const b64 = await fetchBinaryFromRawGithub(repo, branch, entry.path);
+          if (b64 !== null) {
+            results.push({ path: entry.path, content: b64, binary: true });
+            continue;
+          }
+
+          // Fallback for private repos or if the raw fetch failed for
+          // any other reason: use the app's existing fetch function.
+          // If that function decodes binary content as UTF-8 text
+          // internally, the resulting asset can still come out
+          // corrupted — but at least the file will exist in the
+          // mounted filesystem, which is what fixes "Failed to
+          // resolve import". Getting the image byte-perfect for
+          // private repos requires fetchFileContent itself to support
+          // returning base64 for binary paths.
+          const raw = await fetchFileContent(repo, branch, entry.path);
+          results.push({ path: entry.path, content: raw, binary: true });
+        } else {
+          const content = await fetchFileContent(repo, branch, entry.path);
+          results.push({ path: entry.path, content, binary: false });
+        }
       } catch (err) {
+        failed.push(entry.path);
         console.warn(`Fayl alınmadı: ${entry.path}`, err);
       }
     }
@@ -49,10 +106,8 @@ export async function fetchAllFileContents(
 
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 
-  if (!results.some((f) => f.path === "package.json")) {
-    throw new Error(
-      "Bu branch-də package.json tapılmadı (və ya alınmadı) — WebContainer npm layihəsi tələb edir."
-    );
+  if (failed.length > 0) {
+    console.warn(`${failed.length} fayl alınmadı:`, failed);
   }
 
   return results;

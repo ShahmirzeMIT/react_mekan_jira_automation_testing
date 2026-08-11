@@ -1,3 +1,4 @@
+
 // src/components/github/preview/RunPanel.tsx
 import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
@@ -5,12 +6,12 @@ import { LoadingOutlined } from "@ant-design/icons";
 import type { RunStatus } from "@/hooks/useWebContainerRunner";
 
 const STATUS_LABEL: Record<RunStatus, string> = {
-  idle: "Hazır deyil",
-  boot: "Konteyner qalxır",
+  idle: "Not ready",
+  boot: "Starting container",
   install: "npm install",
-  build: "Dev server başlayır",
-  live: "Canlı",
-  error: "Xəta",
+  build: "Starting dev server",
+  live: "Live",
+  error: "Error",
 };
 
 interface RunPanelProps {
@@ -21,21 +22,23 @@ interface RunPanelProps {
 }
 
 export function RunPanel({ status, log, onRun, disabled }: RunPanelProps) {
-  const logRef = useRef<HTMLDivElement>(null);
+  const logRef = useRef(null);
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
   }, [log]);
 
-  const busy = status === "boot" || status === "install" || status === "build";
+  const busy =
+    status === "boot" || status === "install" || status === "build";
 
   return (
-    <div className="p-3 border-b space-y-2 shrink-0">
-      <div className="flex items-center gap-3">
-        <Button size="sm" onClick={onRun} disabled={disabled || busy}>
-          {busy && <LoadingOutlined className="mr-2 animate-spin" />}
-          {status === "idle" || status === "error" ? "Run" : "Yenidən run et"}
-        </Button>
+    <div>
+      <Button size="sm" onClick={onRun} disabled={disabled || busy}>
+        {busy && <LoadingOutlined spin />}
+        {status === "idle" || status === "error"
+          ? "Run"
+          : "Run again"}
+
         <span
           className={
             "text-xs uppercase tracking-wide " +
@@ -48,14 +51,15 @@ export function RunPanel({ status, log, onRun, disabled }: RunPanelProps) {
         >
           {STATUS_LABEL[status]}
         </span>
-      </div>
+      </Button>
 
       <div
         ref={logRef}
         className="h-28 overflow-y-auto rounded-md bg-black text-emerald-300 text-xs font-mono p-2 whitespace-pre-wrap"
       >
-        {log || "log burada görünəcək…"}
+        {log || "Logs will appear here…"}
       </div>
     </div>
   );
 }
+

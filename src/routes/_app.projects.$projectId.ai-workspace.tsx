@@ -174,7 +174,7 @@ export default function AIWorkspacePage() {
         <aside className="flex w-[260px] shrink-0 flex-col rounded-xl border border-border bg-card">
           <div className="flex items-center justify-between px-3 py-2.5 border-b border-border">
             <div>
-              <h2 className="text-sm font-semibold tracking-tight">Jira Queue</h2>
+              <h2 className="text-sm font-semibold tracking-tight"> Queue</h2>
               <p className="mt-0.5 text-[11px] text-muted-foreground">Select one issue</p>
             </div>
             <span className="font-mono text-[11px] text-muted-foreground">
@@ -252,14 +252,14 @@ export default function AIWorkspacePage() {
           <div className="mb-2.5 flex shrink-0 items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Loaded issue</p>
-<p className="truncate text-sm font-medium">
-  {selected
-    ? (() => {
-        const text = `${selected.key} — ${selected.fields.summary}`;
-        return text.length > 100 ? `${text.slice(0, 100)}...` : text;
-      })()
-    : "Nothing selected yet"}
-</p>
+              <p className="truncate text-sm font-medium">
+                {selected
+                  ? (() => {
+                    const text = `${selected.key} — ${selected.fields.summary}`;
+                    return text.length > 100 ? `${text.slice(0, 100)}...` : text;
+                  })()
+                  : "Nothing selected yet"}
+              </p>
             </div>
 
             <div className="flex shrink-0 items-center gap-2">

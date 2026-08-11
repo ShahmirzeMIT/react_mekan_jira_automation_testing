@@ -1,3 +1,4 @@
+
 // src/components/github/preview/PreviewFrame.tsx
 import { Button } from "@/components/ui/button";
 
@@ -21,7 +22,7 @@ export function PreviewFrame({
   reloadKey,
 }: PreviewFrameProps) {
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col h-full">
       <form
         className="flex items-stretch gap-1 border-b p-2 shrink-0"
         onSubmit={(e) => {
@@ -29,12 +30,8 @@ export function PreviewFrame({
           onNavigate(path);
         }}
       >
-        <span
-          title={origin}
-          className="hidden md:flex items-center px-2 text-xs text-muted-foreground truncate max-w-[35%] bg-muted rounded-l-md border"
-        >
-          {origin || "…"}
-        </span>
+        <span>{origin || "…"}</span>
+
         <input
           value={path}
           onChange={(e) => onPathChange(e.target.value)}
@@ -42,18 +39,32 @@ export function PreviewFrame({
           disabled={!origin}
           className="flex-1 text-sm px-2 py-1 border bg-background disabled:opacity-50"
         />
-        <Button type="submit" size="sm" variant="secondary" disabled={!origin}>
-          Get
+
+        <Button
+          type="submit"
+          size="sm"
+          disabled={!origin}
+        >
+          Go
         </Button>
-        <Button type="button" size="sm" variant="outline" onClick={onReload} disabled={!origin}>
+
+        <Button
+          type="button"
+          size="sm"
+          onClick={onReload}
+          disabled={!origin}
+          aria-label="Reload preview"
+        >
           ↻
         </Button>
+
         <a
           href={iframeSrc || undefined}
           target="_blank"
           rel="noreferrer"
           aria-disabled={!origin}
           className="inline-flex items-center px-2 text-sm border rounded-r-md pointer-events-auto aria-disabled:pointer-events-none aria-disabled:opacity-50"
+          aria-label="Open preview in new tab"
         >
           ↗
         </a>
@@ -70,10 +81,11 @@ export function PreviewFrame({
           />
         ) : (
           <div className="flex items-center justify-center h-full text-sm text-muted-foreground px-4 text-center">
-            "Run" et ki, preview burada görünsün.
+            Click "Run" to display the preview here.
           </div>
         )}
       </div>
     </div>
   );
 }
+
