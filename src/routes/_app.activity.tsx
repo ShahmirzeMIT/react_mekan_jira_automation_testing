@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, getDocs, onSnapshot, query, where } from "firebase/firestore";
 import {
   AlertCircle,
   BarChart3,
@@ -14,6 +14,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState, ListSkeleton } from "@/components/common/States";
 import { StatCard } from "@/components/common/StatCard";
 import { db } from "@/config/firebase";
+import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import type { JiraIssue } from "@/types";
 
@@ -24,6 +25,11 @@ interface StoredCanvasIssue {
   issue: JiraIssue;
   issueKey?: string;
   issueSignature?: string;
+}
+
+interface JiraCanvasScope {
+  accountId: string;
+  cloudId?: string;
 }
 
 const STATUS_TONES: Record<string, string> = {
@@ -49,8 +55,7 @@ function toStoredCanvasIssue(id: string, data: Record<string, unknown>): StoredC
     accountId: typeof data["accountId"] === "string" ? data["accountId"] : undefined,
     cloudId: typeof data["cloudId"] === "string" ? data["cloudId"] : undefined,
     issueKey: typeof data["issueKey"] === "string" ? data["issueKey"] : issue.key,
-    issueSignature:
-      typeof data["issueSignature"] === "string" ? data["issueSignature"] : undefined,
+    issueSignature: typeof data["issueSignature"] === "string" ? data["issueSignature"] : undefined,
   };
 }
 
@@ -86,10 +91,114 @@ function isClosed(issue: JiraIssue): boolean {
   return category === "done" || status === "done" || status === "closed";
 }
 
+function emailForJiraUser(data: Record<string, unknown>): string | null {
+  const integration = data["jiraIntegration"];
+  const integrationEmail =
+    typeof integration === "object" && integration !== null
+      ? (integration as Record<string, unknown>)["jiraUserEmail"]
+      : undefined;
+  const email =
+    data["jiraUserEmail"] ??
+    integrationEmail ??
+    data["jiraEmail"] ??
+    data["email"] ??
+    data["userEmail"];
+
+  return typeof email === "string" ? email.trim().toLowerCase() : null;
+}
+
+function isConnectedJiraUser(data: Record<string, unknown>): boolean {
+  const integration = data["jiraIntegration"];
+  return (
+    data["isActive"] === true ||
+    (typeof integration === "object" &&
+      integration !== null &&
+      (integration as Record<string, unknown>)["connected"] === true)
+  );
+}
+
+function jiraCanvasScopeFor(data: Record<string, unknown>): JiraCanvasScope | null {
+  const integration =
+    typeof data["jiraIntegration"] === "object" && data["jiraIntegration"] !== null
+      ? (data["jiraIntegration"] as Record<string, unknown>)
+      : undefined;
+  const accountId = data["jiraAccountId"] ?? integration?.["jiraAccountId"];
+  const cloudId = data["defaultCloudId"] ?? integration?.["defaultCloudId"];
+
+  if (typeof accountId !== "string" || !accountId.trim()) return null;
+
+  return {
+    accountId,
+    cloudId: typeof cloudId === "string" ? cloudId : undefined,
+  };
+}
+
 export default function ActivityPage() {
+  const { user, loading: authLoading } = useAuth();
   const [issues, setIssues] = useState<StoredCanvasIssue[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isScopeLoading, setIsScopeLoading] = useState(true);
+  const [canvasScope, setCanvasScope] = useState<JiraCanvasScope | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!db) {
+      setIsScopeLoading(false);
+      setError("Firebase is not configured.");
+      return;
+    }
+
+    if (authLoading) {
+      setIsScopeLoading(true);
+      return;
+    }
+
+    if (!user?.email) {
+      setCanvasScope(null);
+      setIssues([]);
+      setIsScopeLoading(false);
+      setError(null);
+      return;
+    }
+
+    let isCancelled = false;
+
+    async function loadCanvasScope() {
+      setIsScopeLoading(true);
+      try {
+        const normalizedEmail = user.email.trim().toLowerCase();
+        const snapshot = await getDocs(collection(db, "jira_users"));
+        const jiraUser = snapshot.docs
+          .map((document) => ({ id: document.id, ...document.data() }))
+          .find(
+            (data) =>
+              emailForJiraUser(data) === normalizedEmail &&
+              isConnectedJiraUser(data) &&
+              jiraCanvasScopeFor(data),
+          );
+
+        if (isCancelled) return;
+
+        setCanvasScope(jiraUser ? jiraCanvasScopeFor(jiraUser) : null);
+        setIssues([]);
+        setError(null);
+      } catch (reason) {
+        if (isCancelled) return;
+        console.error("Unable to resolve Jira activity scope:", reason);
+        setCanvasScope(null);
+        setIssues([]);
+        setError(reason instanceof Error ? reason.message : "Unable to resolve Jira account.");
+      } finally {
+        if (!isCancelled) setIsScopeLoading(false);
+      }
+    }
+
+    void loadCanvasScope();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [authLoading, user?.email]);
 
   useEffect(() => {
     if (!db) {
@@ -98,13 +207,30 @@ export default function ActivityPage() {
       return;
     }
 
-    const unsubscribe = onSnapshot(
+    if (isScopeLoading) {
+      setIsLoading(true);
+      return;
+    }
+
+    if (!canvasScope) {
+      setIssues([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const issuesQuery = query(
       collection(db, "jira_canvas_issues"),
+      where("accountId", "==", canvasScope.accountId),
+    );
+
+    const unsubscribe = onSnapshot(
+      issuesQuery,
       (snapshot) => {
         setIssues(
           snapshot.docs
             .map((document) => toStoredCanvasIssue(document.id, document.data()))
-            .filter((issue): issue is StoredCanvasIssue => Boolean(issue)),
+            .filter((issue): issue is StoredCanvasIssue => Boolean(issue))
+            .filter((issue) => !canvasScope.cloudId || issue.cloudId === canvasScope.cloudId),
         );
         setError(null);
         setIsLoading(false);
@@ -117,7 +243,7 @@ export default function ActivityPage() {
     );
 
     return unsubscribe;
-  }, []);
+  }, [canvasScope, isScopeLoading]);
 
   const dashboard = useMemo(() => {
     const todayWorked = issues
@@ -195,12 +321,7 @@ export default function ActivityPage() {
               icon={CircleDot}
               tone="warning"
             />
-            <StatCard
-              label="Open"
-              value={dashboard.open}
-              icon={Clock}
-              hint="Not closed yet"
-            />
+            <StatCard label="Open" value={dashboard.open} icon={Clock} hint="Not closed yet" />
             <StatCard
               label="Closed"
               value={dashboard.closed.length}
