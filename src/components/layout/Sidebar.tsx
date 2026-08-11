@@ -34,26 +34,28 @@ interface Item {
 export function Sidebar() {
   const { sidebarCollapsed, toggleSidebar, user, signOut } = useAppStore();
   const params = useParams<{ projectId?: string }>();
-  const projectId = params.projectId ?? "p-1";
+  const projectId = params.projectId;
+  const projectPath = (section: string) =>
+    projectId ? `/projects/${projectId}/${section}` : `/${section}`;
 
   const groups: { title: string; items: Item[] }[] = [
     {
       title: "Overview",
-      items: [{ label: "Overview", icon: LayoutDashboard, to: `/projects/${projectId}/overview` }],
+      items: [{ label: "Overview", icon: LayoutDashboard, to: projectPath("overview") }],
     },
     {
       title: "Development",
       items: [
-        { label: "Tasks", icon: ListChecks, to: `/projects/${projectId}/tasks` },
-        { label: "Relate Task", icon: Link2, to: `/projects/${projectId}/relate-task` },
-        { label: "AI Workspace", icon: Sparkles, to: `/projects/${projectId}/ai-workspace` },
-        { label: "GitHub", icon: Github, to: `/projects/${projectId}/github` },
+        { label: "Tasks", icon: ListChecks, to: projectPath("tasks") },
+
+        { label: "AI Workspace", icon: Sparkles, to: projectPath("ai-workspace") },
+        { label: "GitHub", icon: Github, to: projectPath("github") },
       ],
     },
     {
       title: "Insights",
       items: [
-        { label: "Activity", icon: Activity, to: `/projects/${projectId}/activity` },
+        { label: "Activity", icon: Activity, to: projectPath("activity") },
         { label: "Projects", icon: FolderKanban, to: "/projects" },
       ],
     },
@@ -103,7 +105,12 @@ export function Sidebar() {
                     to={item.to}
                     title={item.label}
                     aria-label={item.label}
-                    className={({ isActive }) => cn("flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground", isActive && "bg-sidebar-accent text-sidebar-accent-foreground font-medium")}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                        isActive && "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
+                      )
+                    }
                   >
                     <item.icon className="size-4 shrink-0" aria-hidden />
                     {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
@@ -130,7 +137,9 @@ export function Sidebar() {
             </span>
             {!sidebarCollapsed && (
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">{user?.name ?? "Developer"}</span>
+                <span className="block truncate text-sm font-medium">
+                  {user?.name ?? "Developer"}
+                </span>
                 <span className="block text-xs text-muted-foreground">Developer</span>
               </span>
             )}
@@ -154,7 +163,11 @@ export function Sidebar() {
           aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           className="mt-1 flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent"
         >
-          {sidebarCollapsed ? <ChevronsRight className="size-4" /> : <ChevronsLeft className="size-4" />}
+          {sidebarCollapsed ? (
+            <ChevronsRight className="size-4" />
+          ) : (
+            <ChevronsLeft className="size-4" />
+          )}
           {!sidebarCollapsed && <span>Collapse</span>}
         </button>
       </div>

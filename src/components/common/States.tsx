@@ -17,7 +17,12 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn("surface flex flex-col items-center justify-center px-6 py-14 text-center", className)}>
+    <div
+      className={cn(
+        "surface flex flex-col items-center justify-center px-6 py-14 text-center",
+        className,
+      )}
+    >
       {icon ? (
         <div className="mb-4 flex size-11 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground">
           {icon}
@@ -28,6 +33,17 @@ export function EmptyState({
         <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">{description}</p>
       ) : null}
       {action ? <div className="mt-5">{action}</div> : null}
+    </div>
+  );
+}
+
+export function ProjectRequiredState({ pageName = "This page" }: { pageName?: string }) {
+  return (
+    <div className="mx-auto max-w-3xl">
+      <EmptyState
+        title="Select a project first"
+        description={`${pageName} stays empty until a project is selected.`}
+      />
     </div>
   );
 }

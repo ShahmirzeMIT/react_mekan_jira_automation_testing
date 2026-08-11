@@ -15,9 +15,15 @@ import SettingsPage from "@/routes/_app.settings";
 import Index from "@/routes/index";
 import LoginPage from "@/routes/login";
 import JiraCallbackPage from "@/routes/jira-callback";
+import AcceptGithubPage from "@/routes/_app.accept.github";
+import WcRunnerPage from "./routes/_app.wcrunner";
 
 function NotFound() {
-  return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">Page not found.</div>;
+  return (
+    <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+      Page not found.
+    </div>
+  );
 }
 
 export function App() {
@@ -27,16 +33,23 @@ export function App() {
         <Route path="/" element={<Index />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/jira/callback" element={<JiraCallbackPage />} />
+        <Route path="/accept-github" element={<AcceptGithubPage />} />
         <Route element={<AppLayout />}>
           <Route path="/projects" element={<ProjectsPage />} />
+          <Route path="/overview" element={<OverviewPage />} />
+          <Route path="/tasks" element={<TasksPage />} />
+          <Route path="/ai-workspace" element={<AIWorkspacePage />} />
+          <Route path="/github" element={<GithubPage />} />
+          <Route path="/activity" element={<ActivityPage />} />
+          <Route path="/relate-task" element={<RelateTaskPage />} />
           <Route path="/projects/:projectId/overview" element={<OverviewPage />} />
           <Route path="/projects/:projectId/tasks" element={<TasksPage />} />
           <Route path="/projects/:projectId/tasks/:taskId" element={<TaskDetailsPage />} />
-          <Route path="/projects/:projectId/relate-task" element={<RelateTaskPage />} />
           <Route path="/projects/:projectId/ai-workspace" element={<AIWorkspacePage />} />
           <Route path="/projects/:projectId/github" element={<GithubPage />} />
           <Route path="/projects/:projectId/activity" element={<ActivityPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/wc-preview/runner" element={<WcRunnerPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
         <Route path="*" element={<NotFound />} />
