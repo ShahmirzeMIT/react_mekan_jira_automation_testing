@@ -1,8 +1,7 @@
-// pages/AIWorkspacePage.tsx
-import { useMemo, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Send } from "lucide-react";
+import { collection, getDocs } from "firebase/firestore";
+import { toast } from "sonner";
 
 import { SelectedFilesMenu } from "@/components/ai-workspace/SelectedFilesMenu";
 import GithubFiles, {
@@ -10,74 +9,17 @@ import GithubFiles, {
   SelectedGithubFile,
 } from "@/components/ai-workspace/GithubFiles";
 import { AIResultDrawer } from "@/components/ai-workspace/AIResultDrawer";
+import { Button } from "@/components/ui/button";
 import { useGemini } from "@/hooks/useGemini";
-import { parseGeminiResponse } from "@/lib/parseGeminiResponse";
+import { useAuth } from "@/hooks/useAuth";
+import { useAppStore } from "@/store/appStore";
+import { db } from "@/config/firebase";
+import { jiraService } from "@/services/jiraService";
 import { guessLanguageFromPath } from "@/lib/fileLanguage";
-import { GeminiTaskResult } from "@/types/gemini";
-
-interface JiraIssue {
-  id: string;
-  key: string;
-  fields: {
-    summary: string;
-    issuetype: { name: string; iconUrl: string };
-    priority: { name: string; iconUrl: string };
-    status: {
-      name: string;
-      statusCategory: { colorName: string; name: string };
-    };
-    created: string;
-    updated: string;
-  };
-}
-
-const DEMO_ISSUES: JiraIssue[] = [
-  {
-    id: "10007",
-    key: "SCRUM-8",
-    fields: {
-      summary:
-        "Update the Contact page by converting all user-facing text to English and improving the contact form. Add Full Name, Email, Phone Number, Company, Subject, and Message fields. Make Full Name, Email, Phone Number, Subject, and Message required, while Company should remain optional. Add proper validation for every field, including email format, phone number format, minimum character requirements, and maximum character limits where appropriate. Display clear English validation messages for invalid fields and make sure errors disappear when the user corrects the input. Prevent form submission when validation fails, show a loading state while submitting, and disable the submit button during submission. Preserve the existing form submission functionality, styling, responsive behavior, and project architecture. Reuse existing shared form components, validation utilities, hooks, and UI components where possible, and avoid modifying unrelated files or functionality. Ensure the final implementation is fully typed, accessible, and does not introduce any TypeScript, import, or runtime errors.",
-      issuetype: {
-        name: "Story",
-        iconUrl:
-          "https://api.atlassian.com/ex/jira/d2e6b2e3-44d7-4511-a410-21e5f6195476/rest/api/2/universal_avatar/view/type/issuetype/avatar/10315?size=medium",
-      },
-      priority: {
-        name: "Medium",
-        iconUrl: "https://sahmirzememmedyarov.atlassian.net/images/icons/priorities/medium_new.svg",
-      },
-      status: {
-        name: "Done",
-        statusCategory: { colorName: "green", name: "Done" },
-      },
-      created: "2026-08-08T14:58:50.863+0400",
-      updated: "2026-08-08T18:25:24.837+0400",
-    },
-  },
-  {
-    id: "10005",
-    key: "SCRUM-6",
-    fields: {
-      summary: "burada yenilik elemek lazimdir bekar durmaq olmaz",
-      issuetype: {
-        name: "Story",
-        iconUrl:
-          "https://api.atlassian.com/ex/jira/d2e6b2e3-44d7-4511-a410-21e5f6195476/rest/api/2/universal_avatar/view/type/issuetype/avatar/10315?size=medium",
-      },
-      priority: {
-        name: "Medium",
-        iconUrl: "https://sahmirzememmedyarov.atlassian.net/images/icons/priorities/medium_new.svg",
-      },
-      status: {
-        name: "In Progress",
-        statusCategory: { colorName: "yellow", name: "In Progress" },
-      },
-      created: "2026-08-08T14:57:46.689+0400",
-      updated: "2026-08-08T14:57:53.612+0400",
-    },
-  },
-];
+import { mapIssueToTask } from "@/utils";
+import { parseGeminiResponse } from "@/lib/parseGeminiResponse";
+import type { Task, TaskPriority, TaskStatus } from "@/types";
+import type { GeminiTaskResult } from "@/types/gemini";
 
 const STATUS_STYLES: Record<string, { rail: string; dot: string; pill: string }> = {
   green: {
@@ -100,6 +42,11 @@ const STATUS_STYLES: Record<string, { rail: string; dot: string; pill: string }>
     dot: "bg-slate-400",
     pill: "bg-slate-500/10 text-slate-500 dark:text-slate-400",
   },
+  red: {
+    rail: "bg-rose-500",
+    dot: "bg-rose-500",
+    pill: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
+  },
 };
 
 function statusStyle(colorName: string) {
@@ -117,31 +64,182 @@ function relativeTime(iso: string): string {
   return `${days}d ago`;
 }
 
-export default function AIWorkspacePage() {
-  const issues = useMemo(
-    () =>
-      [...DEMO_ISSUES].sort((a, b) => +new Date(b.fields.updated) - +new Date(a.fields.updated)),
-    [],
-  );
+function toStatusColor(status: TaskStatus): string {
+  switch (status) {
+    case "DONE":
+      return "green";
+    case "IN_PROGRESS":
+    case "IN_REVIEW":
+      return "yellow";
+    case "BLOCKED":
+      return "red";
+    default:
+      return "blue-gray";
+  }
+}
 
+function renderPriority(priority: TaskPriority): string {
+  switch (priority) {
+    case "LOWEST":
+      return "Lowest";
+    case "LOW":
+      return "Low";
+    case "MEDIUM":
+      return "Medium";
+    case "HIGH":
+      return "High";
+    case "HIGHEST":
+      return "Highest";
+    default:
+      return priority;
+  }
+}
+
+function isDoneTask(task: Task): boolean {
+  return task.status === "DONE";
+}
+
+interface JiraUserRecord {
+  accessToken?: unknown;
+  defaultCloudId?: unknown;
+  jiraAccountId?: unknown;
+  jiraUserEmail?: unknown;
+  jiraEmail?: unknown;
+  email?: unknown;
+  userEmail?: unknown;
+  isActive?: unknown;
+  jiraIntegration?: unknown;
+}
+
+function getUserEmail(record: JiraUserRecord): string | null {
+  const integration = record.jiraIntegration;
+  const integrationEmail =
+    typeof integration === "object" && integration !== null
+      ? (integration as Record<string, unknown>)["jiraUserEmail"]
+      : undefined;
+  const email =
+    record.jiraUserEmail ??
+    integrationEmail ??
+    record.jiraEmail ??
+    record.email ??
+    record.userEmail;
+  return typeof email === "string" ? email.trim().toLowerCase() : null;
+}
+
+export default function AIWorkspacePage() {
+  const { integrations, ai, setTask } = useAppStore();
+  const { user } = useAuth();
   const { askGemini } = useGemini();
 
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(ai.selectedTaskKey);
   const [notes, setNotes] = useState("");
   const [sending, setSending] = useState(false);
-
+  const [queue, setQueue] = useState<Task[]>([]);
+  const [queueLoading, setQueueLoading] = useState(false);
+  const [queueError, setQueueError] = useState<string | null>(null);
   const [selectedGithubFiles, setSelectedGithubFiles] = useState<SelectedGithubFile[]>([]);
   const githubFilesRef = useRef<GithubFilesHandle>(null);
-
-  // AI nəticəsi üçün drawer state-i
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [aiResult, setAiResult] = useState<GeminiTaskResult | null>(null);
   const [aiRawFallback, setAiRawFallback] = useState<string | null>(null);
 
-  const selected = useMemo(
-    () => issues.find((i) => i.key === selectedKey) ?? null,
-    [issues, selectedKey],
-  );
+  useEffect(() => {
+    setSelectedKey(ai.selectedTaskKey);
+  }, [ai.selectedTaskKey]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadQueue() {
+      if (!integrations.jiraConnected || !user?.email || !db) {
+        if (!active) return;
+        setQueue([]);
+        setQueueError(null);
+        setQueueLoading(false);
+        return;
+      }
+
+      setQueueLoading(true);
+      setQueueError(null);
+
+      try {
+        const snapshot = await getDocs(collection(db, "jira_users"));
+        const normalizedUserEmail = user.email.trim().toLowerCase();
+        const jiraUsers: Array<Record<string, unknown> & { id: string }> = snapshot.docs.map(
+          (document) => ({
+            id: document.id,
+            ...document.data(),
+          }),
+        );
+
+        const jiraUser = jiraUsers.find((data) => {
+          const integration = data["jiraIntegration"];
+          const connected =
+            data["isActive"] === true ||
+            (typeof integration === "object" &&
+              integration !== null &&
+              (integration as Record<string, unknown>)["connected"] === true);
+          return getUserEmail(data as JiraUserRecord) === normalizedUserEmail && connected;
+        });
+
+        const accessToken =
+          typeof jiraUser?.["accessToken"] === "string" ? jiraUser["accessToken"] : null;
+        const cloudId = jiraUser?.["defaultCloudId"];
+        const accountId = jiraUser?.["jiraAccountId"];
+
+        if (!accessToken || typeof cloudId !== "string" || typeof accountId !== "string") {
+          if (!active) return;
+          setQueue([]);
+          setQueueError("Jira connection data is incomplete.");
+          return;
+        }
+
+        const response = await jiraService.getCanvasIssues({
+          accessToken,
+          cloudId,
+          accountId,
+        });
+
+        const tasks = (response.data.issues ?? [])
+          .map((issue) => mapIssueToTask(issue))
+          .filter((task) => !isDoneTask(task));
+
+        if (!active) return;
+        setQueue(tasks);
+      } catch (error) {
+        if (!active) return;
+        console.error("Unable to load Jira canvas issues:", error);
+        setQueue([]);
+        setQueueError(
+          error instanceof Error ? error.message : "Unable to load Jira canvas issues.",
+        );
+      } finally {
+        if (active) setQueueLoading(false);
+      }
+    }
+
+    void loadQueue();
+
+    return () => {
+      active = false;
+    };
+  }, [integrations.jiraConnected, user?.email]);
+
+  const { selected, selectedQueue } = useMemo(() => {
+    const sorted = [...queue].sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt));
+    if (selectedKey) {
+      const selectedItem = sorted.find((task) => task.key === selectedKey) ?? null;
+      if (selectedItem) {
+        const remainder = sorted.filter((task) => task.key !== selectedKey);
+        return { selected: selectedItem, selectedQueue: [selectedItem, ...remainder] };
+      }
+    }
+    return {
+      selected: null,
+      selectedQueue: sorted,
+    };
+  }, [queue, selectedKey]);
+
   const handleRemoveGithubFile = (path: string) => {
     githubFilesRef.current?.removeSelectedFile(path);
   };
@@ -160,7 +258,11 @@ export default function AIWorkspacePage() {
     setAiRawFallback(null);
 
     try {
-      const jiraTask = [selected.fields.summary, notes.trim() ? `Notes: ${notes.trim()}` : ""]
+      const jiraTask = [
+        selected.title,
+        selected.description,
+        notes.trim() ? `Notes: ${notes.trim()}` : "",
+      ]
         .filter(Boolean)
         .join("\n\n");
 
@@ -176,7 +278,6 @@ export default function AIWorkspacePage() {
       if (parsed) {
         setAiResult(parsed);
       } else {
-        // JSON parse alınmadı - xam mətni fallback kimi saxlayırıq ki, itməsin.
         setAiRawFallback(rawText);
       }
       setDrawerOpen(true);
@@ -193,92 +294,96 @@ export default function AIWorkspacePage() {
   return (
     <div className="h-screen overflow-hidden bg-background p-4">
       <div className="mx-auto flex h-full max-w-7xl gap-4">
-        {/* Queue — pick exactly one issue */}
         <aside className="flex w-[260px] shrink-0 flex-col rounded-xl border border-border bg-card">
-          <div className="flex items-center justify-between px-3 py-2.5 border-b border-border">
+          <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
             <div>
-              <h2 className="text-sm font-semibold tracking-tight"> Queue</h2>
+              <h2 className="text-sm font-semibold tracking-tight">Queue</h2>
               <p className="mt-0.5 text-[11px] text-muted-foreground">Select one issue</p>
             </div>
             <span className="font-mono text-[11px] text-muted-foreground">
-              {issues.length.toString().padStart(2, "0")}
+              {selectedQueue.length.toString().padStart(2, "0")}
             </span>
           </div>
 
-          <ul className="flex-1 min-h-0 overflow-y-auto p-1.5 space-y-1.5">
-            {issues.map((issue) => {
-              const isSelected = issue.key === selectedKey;
-              const style = statusStyle(issue.fields.status.statusCategory.colorName);
-              return (
-                <li key={issue.key}>
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={isSelected}
-                    onClick={() => setSelectedKey(isSelected ? null : issue.key)}
-                    className={
-                      "group relative flex w-full items-start gap-2 overflow-hidden rounded-lg border p-2.5 pl-3.5 text-left transition-all " +
-                      (isSelected
-                        ? "border-primary bg-primary/[0.06] shadow-sm"
-                        : "border-border/60 hover:border-border hover:bg-muted/40")
-                    }
-                  >
-                    <span
-                      className={`absolute left-0 top-0 h-full w-1 ${style.rail}`}
-                      aria-hidden
-                    />
+          <ul className="flex-1 min-h-0 space-y-1.5 overflow-y-auto p-1.5">
+            {queueLoading ? (
+              <li className="px-2 py-4 text-center text-sm text-muted-foreground">
+                Loading Jira issues...
+              </li>
+            ) : queueError ? (
+              <li className="px-2 py-4 text-center text-sm text-destructive">{queueError}</li>
+            ) : (
+              selectedQueue.map((task) => {
+                const isSelected = task.key === selectedKey;
+                const style = statusStyle(toStatusColor(task.status));
+                return (
+                  <li key={task.key}>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      onClick={() => {
+                        const nextKey = isSelected ? null : task.key;
+                        setSelectedKey(nextKey);
+                        setTask(nextKey);
+                      }}
+                      className={
+                        "group relative flex w-full items-start gap-2 overflow-hidden rounded-lg border p-2.5 pl-3.5 text-left transition-all " +
+                        (isSelected
+                          ? "border-primary bg-primary/[0.06] shadow-sm"
+                          : "border-border/60 hover:border-border hover:bg-muted/40")
+                      }
+                    >
+                      <span
+                        className={`absolute left-0 top-0 h-full w-1 ${style.rail}`}
+                        aria-hidden
+                      />
 
-                    <img
-                      src={issue.fields.issuetype.iconUrl}
-                      alt={issue.fields.issuetype.name}
-                      className="mt-0.5 size-3.5 shrink-0"
-                    />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono text-[10px] font-medium tracking-wide text-muted-foreground">
+                            {task.key}
+                          </span>
+                          <span className="shrink-0 text-[10px] text-muted-foreground">
+                            {relativeTime(task.updatedAt)}
+                          </span>
+                        </div>
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-mono text-[10px] font-medium tracking-wide text-muted-foreground">
-                          {issue.key}
-                        </span>
-                        <span className="shrink-0 text-[10px] text-muted-foreground">
-                          {relativeTime(issue.fields.updated)}
-                        </span>
-                      </div>
-
-                      <p
-                        className={
-                          "mt-1 line-clamp-2 text-xs leading-snug " +
-                          (isSelected ? "text-foreground" : "text-foreground/90")
-                        }
-                      >
-                        {issue.fields.summary}
-                      </p>
-
-                      <div className="mt-1.5 flex items-center gap-1.5">
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium ${style.pill}`}
+                        <p
+                          className={
+                            "mt-1 line-clamp-2 text-xs leading-snug " +
+                            (isSelected ? "text-foreground" : "text-foreground/90")
+                          }
                         >
-                          <span className={`size-1.5 rounded-full ${style.dot}`} aria-hidden />
-                          {issue.fields.status.name}
-                        </span>
-                        <span className="inline-flex items-center gap-1 text-[9px] text-muted-foreground">
-                          <img
-                            src={issue.fields.priority.iconUrl}
-                            alt=""
-                            className="size-2.5"
-                            aria-hidden
-                          />
-                          {issue.fields.priority.name}
-                        </span>
+                          {task.title}
+                        </p>
+
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium ${style.pill}`}
+                          >
+                            <span className={`size-1.5 rounded-full ${style.dot}`} aria-hidden />
+                            {task.status.replaceAll("_", " ")}
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-[9px] text-muted-foreground">
+                            {renderPriority(task.priority)}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                </li>
-              );
-            })}
+                    </button>
+                  </li>
+                );
+              })
+            )}
+
+            {!queueLoading && !queueError && selectedQueue.length === 0 && (
+              <li className="px-2 py-4 text-center text-sm text-muted-foreground">
+                No Jira issues available.
+              </li>
+            )}
           </ul>
         </aside>
 
-        {/* Composer — instructions + repo browser for the one loaded issue */}
         <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-border bg-card p-3">
           <div className="mb-2.5 flex shrink-0 items-center justify-between gap-3">
             <div className="min-w-0">
@@ -286,12 +391,7 @@ export default function AIWorkspacePage() {
                 Loaded issue
               </p>
               <p className="truncate text-sm font-medium">
-                {selected
-                  ? (() => {
-                      const text = `${selected.key} — ${selected.fields.summary}`;
-                      return text.length > 100 ? `${text.slice(0, 100)}...` : text;
-                    })()
-                  : "Nothing selected yet"}
+                {selected ? `${selected.key} — ${selected.title}` : "Nothing selected yet"}
               </p>
             </div>
 
