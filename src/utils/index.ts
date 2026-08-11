@@ -67,7 +67,7 @@ const relatedByKey: Record<string, { repo: string; branch: string; files: string
   "DEV-138": { repo: "r-1", branch: "feature/repo-browser", files: ["src/components/TaskCard.tsx"] },
 };
 
-export function mapIssueToTask(issue: JiraIssue, projectId = "p-1"): Task {
+export function mapIssueToTask(issue: JiraIssue): Task {
   const f = issue.fields;
   const related = relatedByKey[issue.key];
   const status = mapJiraStatus(f.status.name);
@@ -89,8 +89,7 @@ export function mapIssueToTask(issue: JiraIssue, projectId = "p-1"): Task {
       email: f.assignee?.emailAddress ?? "",
       role: "Developer",
     },
-    projectId,
-    jiraProject: f.project.key,
+    jiraKey: f.project.key,
     issueType: f.issuetype.name,
     labels: f.labels ?? [],
     ...(related ? { repositoryId: related.repo, branch: related.branch } : {}),

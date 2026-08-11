@@ -25,7 +25,6 @@ export default function ProfilePage() {
         <StatCard label="Tasks Completed" value={18} tone="success" />
         <StatCard label="AI Assisted" value={15} tone="accent" />
         <StatCard label="Repositories" value={3} />
-        <StatCard label="Projects" value={2} />
         <StatCard label="AI Reviews" value={12} tone="accent" />
       </div>
 

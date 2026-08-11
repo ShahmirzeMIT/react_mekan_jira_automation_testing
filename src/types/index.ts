@@ -34,8 +34,7 @@ export interface Task {
   status: TaskStatus;
   priority: TaskPriority;
   assignee: User;
-  projectId: string;
-  jiraProject: string;
+  jiraKey: string;
   issueType: string;
   labels: string[];
   repositoryId?: string;
@@ -49,23 +48,6 @@ export interface Task {
   comments: TaskComment[];
   createdAt: string;
   updatedAt: string;
-}
-
-export interface Project {
-  id: string;
-  name: string;
-  description: string;
-  jiraProject: string;
-  githubRepository: string;
-  defaultBranch: string;
-  icon: string;
-  color: string;
-  status: "Active" | "Paused" | "Archived";
-  tasks: number;
-  completed: number;
-  aiAssisted: number;
-  createdAt?: string;
-  updatedAt?: string;
 }
 
 export interface Repository {

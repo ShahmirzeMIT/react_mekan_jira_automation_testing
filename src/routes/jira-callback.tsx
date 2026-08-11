@@ -30,9 +30,7 @@ export default function JiraCallbackPage() {
         connectJira(resource?.name ?? response.data.cloudId);
         logActivity("jira", `Jira connected: ${response.data.jiraDisplayName}`);
         toast.success(response.message);
-        const projectId = sessionStorage.getItem("devflow.jira.return-project");
-        sessionStorage.removeItem("devflow.jira.return-project");
-        navigate(projectId ? `/projects/${projectId}/tasks` : "/tasks", { replace: true });
+        navigate("/tasks", { replace: true });
       })
       .catch((reason: unknown) =>
         setError(reason instanceof Error ? reason.message : "Jira connection failed."),

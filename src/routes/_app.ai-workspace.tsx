@@ -1,11 +1,9 @@
 // pages/AIWorkspacePage.tsx
 import { useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Send } from "lucide-react";
 
-import { ProjectRequiredState } from "@/components/common/States";
 import { SelectedFilesMenu } from "@/components/ai-workspace/SelectedFilesMenu";
 import GithubFiles, {
   GithubFilesHandle,
@@ -120,7 +118,6 @@ function relativeTime(iso: string): string {
 }
 
 export default function AIWorkspacePage() {
-  const { projectId } = useParams<{ projectId?: string }>();
   const issues = useMemo(
     () =>
       [...DEMO_ISSUES].sort((a, b) => +new Date(b.fields.updated) - +new Date(a.fields.updated)),
@@ -145,9 +142,6 @@ export default function AIWorkspacePage() {
     () => issues.find((i) => i.key === selectedKey) ?? null,
     [issues, selectedKey],
   );
-
-  if (!projectId) return <ProjectRequiredState pageName="AI Workspace" />;
-
   const handleRemoveGithubFile = (path: string) => {
     githubFilesRef.current?.removeSelectedFile(path);
   };

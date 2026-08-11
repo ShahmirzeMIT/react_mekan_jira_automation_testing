@@ -11,8 +11,6 @@ export default function AcceptGithubPage() {
   const { connectGithub } = useAppStore();
   const [error, setError] = useState<string | null>(null);
   const [complete, setComplete] = useState(false);
-  const projectId = sessionStorage.getItem("devflow.github.return-project");
-  const githubPath = projectId ? `/projects/${projectId}/github` : "/github";
 
   // Bu callback-in bir dəfədən çox işə düşməsinin qarşısını alır
   // (StrictMode double-invoke, ya da dependency referens dəyişikliyi səbəbindən)
@@ -47,12 +45,11 @@ export default function AcceptGithubPage() {
         // Update app state
         connectGithub(response.login || response.data?.login || "GitHub");
         sessionStorage.removeItem("devflow.github.user-id");
-        sessionStorage.removeItem("devflow.github.return-project");
         setComplete(true);
 
         // Redirect to GitHub page after 1 second
         setTimeout(() => {
-          navigate(githubPath);
+          navigate("/github");
         }, 1000);
       })
       .catch((reason: unknown) => {
@@ -85,7 +82,7 @@ export default function AcceptGithubPage() {
               : "Finishing authorization securely.")}
         </p>
         {(error || complete) && (
-          <Button className="mt-5" onClick={() => navigate(githubPath)}>
+          <Button className="mt-5" onClick={() => navigate("/github")}>
             Back to GitHub
           </Button>
         )}

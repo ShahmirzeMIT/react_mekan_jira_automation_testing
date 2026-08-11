@@ -31,7 +31,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      navigate("/projects", { replace: true });
+      navigate("/tasks", { replace: true });
     }
   }, [isLoading, isAuthenticated, navigate]);
 

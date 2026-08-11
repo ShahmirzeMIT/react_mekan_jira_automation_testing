@@ -35,7 +35,6 @@ export default function SettingsPage() {
 
       <Section title="General">
         <p>Workspace · DevFlow AI</p>
-        <p>Default project · Developer Productivity Platform</p>
       </Section>
 
       <Section title="Jira Integration">
@@ -46,7 +45,6 @@ export default function SettingsPage() {
               connected={integrations.jiraConnected}
             />
             <p className="mt-2">Workspace · devflow.atlassian.net</p>
-            <p>Project · {integrations.jiraProject ?? "—"}</p>
             <p>Last sync · {integrations.jiraLastSync ?? "Never"}</p>
           </div>
           {integrations.jiraConnected ? (
@@ -96,7 +94,7 @@ export default function SettingsPage() {
             <Button
               size="sm"
               onClick={() => {
-                connectGithub("devflow-ai");
+                connectGithub("GitHub");
                 toast.success("GitHub connected successfully.");
               }}
             >

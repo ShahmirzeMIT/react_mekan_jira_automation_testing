@@ -6,7 +6,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { AIStatusBadge, ConnectionBadge } from "@/components/common/Badges";
 
 const titles: Record<string, string> = {
-  overview: "Overview",
   tasks: "Tasks",
   "relate-task": "Relate Task",
   "ai-workspace": "AI Workspace",
@@ -14,7 +13,6 @@ const titles: Record<string, string> = {
   activity: "Activity",
   profile: "Profile",
   settings: "Settings",
-  projects: "Projects",
 };
 
 export function Header() {
@@ -29,9 +27,9 @@ export function Header() {
     toggleTheme,
   } = useAppStore();
   const { pathname } = useLocation();
-  const params = useParams<{ projectId?: string; taskId?: string }>();
+  const params = useParams<{ taskId?: string }>();
   const segments = pathname.split("/").filter(Boolean);
-  const last = segments[segments.length - 1] ?? "projects";
+  const last = segments[segments.length - 1] ?? "tasks";
   const title = params.taskId ? params.taskId : (titles[last] ?? "Workspace");
   const isTaskArea = ["tasks", "ai-workspace", "relate-task"].some((s) => pathname.includes(s));
 
@@ -50,7 +48,7 @@ export function Header() {
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold">{title}</p>
         <p className="truncate font-mono text-[11px] text-muted-foreground">
-          {params.projectId ? `devflow / ${params.projectId}` : "devflow"} / {last}
+          devflow / {last}
         </p>
       </div>
 

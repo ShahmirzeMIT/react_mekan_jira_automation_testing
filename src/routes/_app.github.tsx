@@ -2,11 +2,9 @@
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
-import { ProjectRequiredState } from "@/components/common/States";
 import { ConnectionBadge } from "@/components/common/Badges";
 import { useAppStore } from "@/store/appStore";
 import { useAuth } from "@/hooks/useAuth";
-import { useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { Space, Card } from "antd";
 import { ReloadOutlined, LoadingOutlined } from "@ant-design/icons";
@@ -24,7 +22,6 @@ import { LoaderPinwheelIcon } from "lucide-react";
 export default function GithubPage() {
   const { integrations } = useAppStore();
   const { user } = useAuth();
-  const { projectId } = useParams<{ projectId?: string }>();
 
   const [isLoadingContent, setIsLoadingContent] = useState(false);
 
@@ -62,10 +59,10 @@ export default function GithubPage() {
   const githubId = localStorage.getItem("devflow.github.id");
 
   useEffect(() => {
-    if (projectId && isConnected && user && githubId) {
+    if (isConnected && user && githubId) {
       fetchRepositories(githubId);
     }
-  }, [projectId, isConnected, user]);
+  }, [isConnected, user]);
 
   const handleRepoSelect = (value: string) => {
     setSelectedRepo(value);
@@ -173,8 +170,6 @@ export default function GithubPage() {
 
   const isConnectedCheck = integrations.githubConnected || isConnected;
 
-  if (!projectId) return <ProjectRequiredState pageName="GitHub" />;
-
   return (
     <div className="mx-auto max-w-7xl">
       <PageHeader
@@ -188,7 +183,7 @@ export default function GithubPage() {
         }
         actions={
           !isConnectedCheck ? (
-            <Button size="sm" onClick={() => connectGithub(projectId)}>
+            <Button size="sm" onClick={() => connectGithub()}>
               Connect GitHub
             </Button>
           ) : undefined

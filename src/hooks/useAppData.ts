@@ -1,7 +1,6 @@
 // hooks/useAppData.ts
 import { useCallback, useEffect, useState } from "react";
 import { githubService } from "@/services/githubService";
-import { projectService } from "@/services/projectService";
 import { taskService } from "@/services/taskService";
 
 function useServiceData<T>(load: () => Promise<T>, enabled = true) {
@@ -36,28 +35,17 @@ function useServiceData<T>(load: () => Promise<T>, enabled = true) {
   return { data, isLoading, error, refetch };
 }
 
-export function useProjects() {
-  return useServiceData(useCallback(() => projectService.getProjects(), []));
-}
-
-export function useProject(id?: string) {
+export function useTasks(enabled = true) {
   return useServiceData(
-    useCallback(() => projectService.getProject(id ?? ""), [id]),
-    Boolean(id),
+    useCallback(() => taskService.getTasks(), []),
+    enabled,
   );
 }
 
-export function useTasks(projectId?: string, enabled = true) {
+export function useTask(key?: string) {
   return useServiceData(
-    useCallback(() => taskService.getTasks(projectId ?? ""), [projectId]),
-    Boolean(projectId) && enabled,
-  );
-}
-
-export function useTask(projectId?: string, key?: string) {
-  return useServiceData(
-    useCallback(() => taskService.getTask(projectId ?? "", key ?? ""), [projectId, key]),
-    Boolean(projectId && key),
+    useCallback(() => taskService.getTask(key ?? ""), [key]),
+    Boolean(key),
   );
 }
 
