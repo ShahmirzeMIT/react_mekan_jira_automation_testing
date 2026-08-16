@@ -272,6 +272,9 @@ export default function AIWorkspacePage() {
         language: guessLanguageFromPath(path),
       }));
 
+      console.log(jiraTask,'jiraTask');
+      console.log(filesForAI,'filesForAI');
+      
       const rawText = await askGemini(jiraTask, filesForAI);
       const parsed = parseGeminiResponse(rawText);
 
@@ -391,7 +394,7 @@ export default function AIWorkspacePage() {
                 Loaded issue
               </p>
               <p className="truncate text-sm font-medium">
-                {selected ? `${selected.key} — ${selected.title}` : "Nothing selected yet"}
+                {selected ? `${selected.key} — ${selected.title.split(' ').slice(0, 15).join(' ')}..` : "Nothing selected yet"}
               </p>
             </div>
 
