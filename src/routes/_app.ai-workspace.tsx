@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Send } from "lucide-react";
+import { Send, Sparkles } from "lucide-react";
 import { collection, getDocs } from "firebase/firestore";
 import { toast } from "sonner";
 
@@ -8,6 +8,7 @@ import GithubFiles, {
   GithubFilesHandle,
   SelectedGithubFile,
 } from "@/components/ai-workspace/GithubFiles";
+import { RepoFileEntry } from "@/components/github/RepoFileTree";
 import { AIResultDrawer } from "@/components/ai-workspace/AIResultDrawer";
 import { Button } from "@/components/ui/button";
 import { useGemini } from "@/hooks/useGemini";
@@ -129,7 +130,7 @@ function getUserEmail(record: JiraUserRecord): string | null {
 export default function AIWorkspacePage() {
   const { integrations, ai, setTask } = useAppStore();
   const { user } = useAuth();
-  const { askGemini } = useGemini();
+  const { askGemini, askGeminiSelectFiles } = useGemini();
 
   const [selectedKey, setSelectedKey] = useState<string | null>(ai.selectedTaskKey);
   const [notes, setNotes] = useState("");
@@ -138,10 +139,17 @@ export default function AIWorkspacePage() {
   const [queueLoading, setQueueLoading] = useState(false);
   const [queueError, setQueueError] = useState<string | null>(null);
   const [selectedGithubFiles, setSelectedGithubFiles] = useState<SelectedGithubFile[]>([]);
+  const [repoFiles, setRepoFiles] = useState<RepoFileEntry[]>([]);
   const githubFilesRef = useRef<GithubFilesHandle>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [aiResult, setAiResult] = useState<GeminiTaskResult | null>(null);
   const [aiRawFallback, setAiRawFallback] = useState<string | null>(null);
+
+  // "Auto Generate Code" axını üçün ayrıca state-lər (öz drawer-i ilə)
+  const [autoSending, setAutoSending] = useState(false);
+  const [autoDrawerOpen, setAutoDrawerOpen] = useState(false);
+  const [autoAiResult, setAutoAiResult] = useState<GeminiTaskResult | null>(null);
+  const [autoAiRawFallback, setAutoAiRawFallback] = useState<string | null>(null);
 
   useEffect(() => {
     setSelectedKey(ai.selectedTaskKey);
@@ -244,6 +252,16 @@ export default function AIWorkspacePage() {
     githubFilesRef.current?.removeSelectedFile(path);
   };
 
+  function buildJiraTask(): string {
+    return [
+      selected?.title,
+      selected?.description,
+      notes.trim() ? `Notes: ${notes.trim()}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }
+
   async function handleDispatch() {
     if (!selected) return;
 
@@ -258,13 +276,7 @@ export default function AIWorkspacePage() {
     setAiRawFallback(null);
 
     try {
-      const jiraTask = [
-        selected.title,
-        selected.description,
-        notes.trim() ? `Notes: ${notes.trim()}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n\n");
+      const jiraTask = buildJiraTask();
 
       const filesForAI = readyFiles.map(({ path, content }) => ({
         path,
@@ -272,9 +284,9 @@ export default function AIWorkspacePage() {
         language: guessLanguageFromPath(path),
       }));
 
-      console.log(jiraTask,'jiraTask');
-      console.log(filesForAI,'filesForAI');
-      
+      console.log(jiraTask, "jiraTask");
+      console.log(filesForAI, "filesForAI");
+
       const rawText = await askGemini(jiraTask, filesForAI);
       const parsed = parseGeminiResponse(rawText);
 
@@ -291,6 +303,88 @@ export default function AIWorkspacePage() {
       console.error(err);
     } finally {
       setSending(false);
+    }
+  }
+
+  // Yeni axın: manual fayl seçimi olmadan, bütün repo strukturunu (path/size/sha/type)
+  // Gemini-yə göndərir, AI hansı faylların lazım olduğuna qərar verir, sonra həmin
+  // faylların content-i /github/file-content (useGithub -> fetchFileContent) ilə alınır
+  // və son olaraq real kod dəyişikliyi üçün Gemini-yə yenidən göndərilir.
+  async function handleAutoDispatch() {
+    if (!selected) return;
+
+    if (repoFiles.length === 0) {
+      toast.error("Əvvəlcə GitHub-da repo/branch seçib \"Load Content\" ilə strukturu yükləyin.");
+      return;
+    }
+
+    setAutoSending(true);
+    setAutoAiResult(null);
+    setAutoAiRawFallback(null);
+
+    try {
+      const jiraTask = buildJiraTask();
+
+      const fileStructure = repoFiles.map(({ path, size, sha, type }) => ({
+        path,
+        size,
+        sha,
+        type,
+      }));
+
+      // Step 1: Gemini-dən hansı faylların lazım olduğunu soruş (yalnız struktur, content yox)
+      const selection = await askGeminiSelectFiles(jiraTask, fileStructure);
+      const selectedPaths = selection?.selectedFiles ?? [];
+
+      if (selection?.status === "needs_more_information" || selectedPaths.length === 0) {
+        toast.error("AI bu tapşırıq üçün lazımi faylları müəyyən edə bilmədi.");
+        return;
+      }
+
+      // Step 2: seçilmiş hər fayl üçün real content-i GitHub-dan al
+      const filesWithContent = await Promise.all(
+        selectedPaths.map(async (path) => {
+          try {
+            const content = (await githubFilesRef.current?.getFileContent(path)) ?? "";
+            return {
+              path,
+              content,
+              language: guessLanguageFromPath(path),
+            };
+          } catch (err) {
+            console.error("Fayl content-i alınmadı:", path, err);
+            return {
+              path,
+              content: "",
+              language: guessLanguageFromPath(path),
+            };
+          }
+        }),
+      );
+
+      const usableFiles = filesWithContent.filter((f) => f.content);
+      if (usableFiles.length === 0) {
+        toast.error("Seçilmiş faylların content-i alınmadı.");
+        return;
+      }
+
+      // Step 3: real kod dəyişikliyi üçün Gemini-yə göndər
+      const rawText = await askGemini(jiraTask, usableFiles);
+      const parsed = parseGeminiResponse(rawText);
+
+      if (parsed) {
+        setAutoAiResult(parsed);
+      } else {
+        setAutoAiRawFallback(rawText);
+      }
+      setAutoDrawerOpen(true);
+
+      toast.success(`AI (auto) cavabı hazırdır: ${selected.key}`);
+    } catch (err) {
+      toast.error("Auto generate alınmadı. Yenidən cəhd edin.");
+      console.error(err);
+    } finally {
+      setAutoSending(false);
     }
   }
 
@@ -400,6 +494,14 @@ export default function AIWorkspacePage() {
 
             <div className="flex shrink-0 items-center gap-2">
               <SelectedFilesMenu files={selectedGithubFiles} onRemove={handleRemoveGithubFile} />
+              <Button
+                onClick={handleAutoDispatch}
+                disabled={!selected || autoSending}
+                variant="secondary"
+              >
+                <Sparkles className="mr-2 size-4" aria-hidden />
+                {autoSending ? "Analiz edilir…" : "Auto Generate Code"}
+              </Button>
               <Button onClick={handleDispatch} disabled={!selected || sending}>
                 <Send className="mr-2 size-4" aria-hidden />
                 {sending ? "Sending…" : "Send to AI"}
@@ -408,7 +510,11 @@ export default function AIWorkspacePage() {
           </div>
 
           <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-border/60">
-            <GithubFiles ref={githubFilesRef} onSelectedFilesChange={setSelectedGithubFiles} />
+            <GithubFiles
+              ref={githubFilesRef}
+              onSelectedFilesChange={setSelectedGithubFiles}
+              onRepoFilesChange={setRepoFiles}
+            />
           </div>
         </section>
       </div>
@@ -418,6 +524,13 @@ export default function AIWorkspacePage() {
         onClose={() => setDrawerOpen(false)}
         result={aiResult}
         rawFallback={aiRawFallback}
+      />
+
+      <AIResultDrawer
+        open={autoDrawerOpen}
+        onClose={() => setAutoDrawerOpen(false)}
+        result={autoAiResult}
+        rawFallback={autoAiRawFallback}
       />
     </div>
   );

@@ -28,14 +28,16 @@ export interface SelectedGithubFile {
 export interface GithubFilesHandle {
   removeSelectedFile: (path: string) => void;
   clearSelectedFiles: () => void;
+  getFileContent: (path: string) => Promise<string>;
 }
 
 interface GithubFilesProps {
   onSelectedFilesChange?: (files: SelectedGithubFile[]) => void;
+  onRepoFilesChange?: (files: RepoFileEntry[]) => void;
 }
 
 function GithubFilesInner(
-  { onSelectedFilesChange }: GithubFilesProps,
+  { onSelectedFilesChange, onRepoFilesChange }: GithubFilesProps,
   ref: React.Ref<GithubFilesHandle>,
 ) {
   const { integrations } = useAppStore();
@@ -107,6 +109,13 @@ function GithubFilesInner(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPaths, fileContentCache]);
 
+  // Repo faylları dəyişdikcə (Load Content basıldıqda) parent-ə tam ağacı ötürür,
+  // ki AI Workspace səhifəsi strukturu Gemini-yə göndərə bilsin.
+  useEffect(() => {
+    onRepoFilesChange?.(repoFiles);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repoFiles]);
+
   useImperativeHandle(ref, () => ({
     removeSelectedFile: (path: string) => {
       setSelectedPaths((prev) => {
@@ -117,6 +126,22 @@ function GithubFilesInner(
       });
     },
     clearSelectedFiles: () => setSelectedPaths(new Set()),
+    // AI faylları seçdikdən sonra bu path-lərin content-ini əldə etmək üçün.
+    // Artıq cache-də varsa yenidən fetch etmir.
+    getFileContent: async (path: string) => {
+      if (fileContentCache[path] !== undefined) {
+        return fileContentCache[path];
+      }
+      if (!selectedRepo || !selectedBranch) {
+        throw new Error("Repository or branch not selected.");
+      }
+      const raw = await fetchFileContent(selectedRepo, selectedBranch, path);
+      const extracted = extractFileContent(raw);
+      setFileContentCache((prev) =>
+        prev[path] !== undefined ? prev : { ...prev, [path]: extracted },
+      );
+      return extracted;
+    },
   }));
 
   const handleToggleFileSelection = (path: string) => {
