@@ -394,7 +394,7 @@ export default function AIWorkspacePage() {
                 Loaded issue
               </p>
               <p className="truncate text-sm font-medium">
-                {selected ? `${selected.key} — ${selected.title.split(' ').slice(0, 15).join(' ')}..` : "Nothing selected yet"}
+                {selected ? `${selected.key} — ${selected.title.split(' ').slice(0, 10).join(' ')}..` : "Nothing selected yet"}
               </p>
             </div>
 
