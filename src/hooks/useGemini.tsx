@@ -81,7 +81,7 @@ export function useGemini() {
   const askGeminiSelectFiles = async (
     jiraTask: string,
     fileStructure: RepoFileMeta[],
-  ): Promise<GeminiFileSelectionResult | null> => {
+  ): Promise<any | null> => {
     setSelecting(true);
     setSelectError(null);
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, Sparkles } from "lucide-react";
+import { Send, Sparkles, Loader2 } from "lucide-react";
 import { collection, getDocs } from "firebase/firestore";
 import { toast } from "sonner";
 
@@ -141,10 +141,53 @@ function splitOwnerRepo(selectedRepo: string | undefined): {
   return { owner: null, repo: selectedRepo };
 }
 
+// ---------------------------------------------------------------------------
+// Modern full-panel loading overlay, used both for "Send to AI" and
+// "Auto Generate Code" flows. Shows a spinning gradient ring + animated
+// step label so the user has visual feedback while waiting for the API.
+// ---------------------------------------------------------------------------
+interface AILoadingOverlayProps {
+  active: boolean;
+  label: string;
+  subLabel?: string;
+}
+
+function AILoadingOverlay({ active, label, subLabel }: AILoadingOverlayProps) {
+  if (!active) return null;
+
+  return (
+    <div
+      className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-background/70 backdrop-blur-sm transition-opacity duration-200"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="relative flex size-16 items-center justify-center">
+        <span className="absolute inset-0 rounded-full bg-primary/20 blur-xl animate-pulse" />
+        <span className="absolute inset-0 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
+        <Sparkles className="relative size-6 text-primary animate-pulse" aria-hidden />
+      </div>
+
+      <div className="flex flex-col items-center gap-1 text-center">
+        <p className="text-sm font-medium text-foreground">{label}</p>
+        {subLabel && (
+          <p className="text-xs text-muted-foreground">{subLabel}</p>
+        )}
+      </div>
+
+      <div className="flex items-center gap-1.5" aria-hidden>
+        <span className="size-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.3s]" />
+        <span className="size-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.15s]" />
+        <span className="size-1.5 animate-bounce rounded-full bg-primary" />
+      </div>
+    </div>
+  );
+}
+
 export default function AIWorkspacePage() {
   const { integrations, ai, setTask } = useAppStore();
   const { user } = useAuth();
-  const { askGemini, askGeminiSelectFiles } = useGemini();
+  const { askGemini, askGeminiSelectFiles, loading: geminiLoading, selecting: geminiSelecting } =
+    useGemini();
   const githubId = localStorage.getItem("devflow.github.id");
 
   const [selectedKey, setSelectedKey] = useState<string | null>(ai.selectedTaskKey);
@@ -171,6 +214,11 @@ export default function AIWorkspacePage() {
   const [autoDrawerOpen, setAutoDrawerOpen] = useState(false);
   const [autoAiResult, setAutoAiResult] = useState<GeminiTaskResult | null>(null);
   const [autoAiRawFallback, setAutoAiRawFallback] = useState<string | null>(null);
+
+  // Auto-flow-un hansı addımda olduğunu göstərmək üçün (loading label-i dəyişdirmək üçün)
+  const [autoStage, setAutoStage] = useState<
+    "idle" | "selecting" | "fetching" | "generating"
+  >("idle");
 
   useEffect(() => {
     setSelectedKey(ai.selectedTaskKey);
@@ -342,6 +390,7 @@ export default function AIWorkspacePage() {
     setAutoSending(true);
     setAutoAiResult(null);
     setAutoAiRawFallback(null);
+    setAutoStage("selecting");
 
     try {
       const jiraTask = buildJiraTask();
@@ -353,7 +402,7 @@ export default function AIWorkspacePage() {
         type,
       }));
 
-      // Step 1: Gemini-dən hansı faylların lazım olduğunu soruş (yalnız struktur, content yox)
+      // Step 1: backend-dən (Gemini) hansı faylların lazım olduğunu soruş (yalnız struktur, content yox)
       const selection = await askGeminiSelectFiles(jiraTask, fileStructure);
       const selectedPaths = selection?.selectedFiles ?? [];
 
@@ -363,6 +412,7 @@ export default function AIWorkspacePage() {
       }
 
       // Step 2: seçilmiş hər fayl üçün real content-i GitHub-dan al
+      setAutoStage("fetching");
       const filesWithContent = await Promise.all(
         selectedPaths.map(async (path) => {
           try {
@@ -390,6 +440,7 @@ export default function AIWorkspacePage() {
       }
 
       // Step 3: real kod dəyişikliyi üçün Gemini-yə göndər
+      setAutoStage("generating");
       const rawText = await askGemini(jiraTask, usableFiles);
       const parsed = parseGeminiResponse(rawText);
 
@@ -406,6 +457,7 @@ export default function AIWorkspacePage() {
       console.error(err);
     } finally {
       setAutoSending(false);
+      setAutoStage("idle");
     }
   }
 
@@ -413,6 +465,22 @@ export default function AIWorkspacePage() {
     () => splitOwnerRepo(activeRepo),
     [activeRepo],
   );
+
+  const isManualBusy = sending || geminiLoading;
+  const isAutoBusy = autoSending || geminiSelecting || geminiLoading;
+
+  const autoStageLabel = useMemo(() => {
+    switch (autoStage) {
+      case "selecting":
+        return "AI is picking the relevant files…";
+      case "fetching":
+        return "Fetching file contents from GitHub…";
+      case "generating":
+        return "Generating the code change…";
+      default:
+        return "Working…";
+    }
+  }, [autoStage]);
 
   return (
     <div className="h-screen overflow-hidden bg-background p-4">
@@ -522,15 +590,23 @@ export default function AIWorkspacePage() {
               <SelectedFilesMenu files={selectedGithubFiles} onRemove={handleRemoveGithubFile} />
               <Button
                 onClick={handleAutoDispatch}
-                disabled={!selected || autoSending}
+                disabled={!selected || isAutoBusy || isManualBusy}
                 variant="secondary"
               >
-                <Sparkles className="mr-2 size-4" aria-hidden />
-                {autoSending ? "Analiz edilir…" : "Auto Generate Code"}
+                {isAutoBusy ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
+                ) : (
+                  <Sparkles className="mr-2 size-4" aria-hidden />
+                )}
+                {isAutoBusy ? "Analiz edilir…" : "Auto Generate Code"}
               </Button>
-              <Button onClick={handleDispatch} disabled={!selected || sending}>
-                <Send className="mr-2 size-4" aria-hidden />
-                {sending ? "Sending…" : "Send to AI"}
+              <Button onClick={handleDispatch} disabled={!selected || isManualBusy || isAutoBusy}>
+                {isManualBusy ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
+                ) : (
+                  <Send className="mr-2 size-4" aria-hidden />
+                )}
+                {isManualBusy ? "Sending…" : "Send to AI"}
               </Button>
             </div>
           </div>
@@ -544,6 +620,18 @@ export default function AIWorkspacePage() {
                 setActiveRepo(repo);
                 setActiveBranch(branch);
               }}
+            />
+
+            <AILoadingOverlay
+              active={isManualBusy}
+              label="Sending to AI…"
+              subLabel="Generating the code change based on selected files"
+            />
+
+            <AILoadingOverlay
+              active={isAutoBusy}
+              label={autoStageLabel}
+              subLabel="This can take a few moments"
             />
           </div>
         </section>
