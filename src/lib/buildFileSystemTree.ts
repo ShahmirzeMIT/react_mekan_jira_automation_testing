@@ -8,15 +8,42 @@ export interface WebContainerFile {
   binary?: boolean;
 }
 
+export type PreviewRunMode = "auto" | "frontend" | "node" | "python";
+
+export interface PickedRunCommand {
+  command: string;
+  args: string[];
+  mode: Exclude<PreviewRunMode, "auto">;
+  label: string;
+  install: boolean;
+}
+
 // Extensions that need to be written as real bytes, not a JS string.
 // Writing an image as UTF-8 text corrupts it — invalid byte sequences
 // get silently replaced — even though the import would "resolve" fine.
 // Going through base64 -> Uint8Array avoids that entirely.
 const BINARY_EXTENSIONS = new Set([
-  "png", "jpg", "jpeg", "gif", "webp", "avif", "bmp", "ico",
-  "woff", "woff2", "ttf", "otf", "eot",
-  "mp3", "wav", "ogg", "mp4", "webm", "mov",
-  "pdf", "zip",
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "avif",
+  "bmp",
+  "ico",
+  "woff",
+  "woff2",
+  "ttf",
+  "otf",
+  "eot",
+  "mp3",
+  "wav",
+  "ogg",
+  "mp4",
+  "webm",
+  "mov",
+  "pdf",
+  "zip",
 ]);
 
 export function isBinaryPath(path: string): boolean {
@@ -65,19 +92,163 @@ export function buildFileSystemTree(files: WebContainerFile[]): FileSystemTree {
   return root;
 }
 
-/**
- * Picks the dev command from package.json scripts: prefers "dev"
- * (Vite's convention), falls back to "start", and as a last resort
- * spawns `vite` directly if package.json has neither script.
- */
-export function pickDevCommand(pkgJsonRaw: string): [string, string[]] {
+function hasFile(files: WebContainerFile[], path: string): boolean {
+  return files.some((file) => file.path.replace(/^\/+/, "") === path);
+}
+
+function findFirstFile(files: WebContainerFile[], candidates: string[]): string | null {
+  return candidates.find((path) => hasFile(files, path)) ?? null;
+}
+
+function readTextFile(files: WebContainerFile[], path: string): string | null {
+  const file = files.find((item) => item.path.replace(/^\/+/, "") === path);
+  return file && !file.binary ? file.content : null;
+}
+
+function parsePackageScripts(pkgJsonRaw: string | null): Record<string, string> {
+  if (!pkgJsonRaw) return {};
   try {
     const pkg = JSON.parse(pkgJsonRaw);
-    const scripts = pkg.scripts ?? {};
-    if (scripts.dev) return ["npm", ["run", "dev"]];
-    if (scripts.start) return ["npm", ["run", "start"]];
+    return pkg && typeof pkg.scripts === "object" && pkg.scripts !== null ? pkg.scripts : {};
   } catch {
-    // fall through to default
+    return {};
   }
+}
+
+function hasFrontendEntry(files: WebContainerFile[]): boolean {
+  return (
+    hasFile(files, "index.html") ||
+    files.some((file) => /(^|\/)(App|main|index)\.(tsx|jsx|ts|js)$/.test(file.path))
+  );
+}
+
+function hasPythonEntry(files: WebContainerFile[]): boolean {
+  return files.some((file) => file.path.endsWith(".py"));
+}
+
+function hasNodeEntry(files: WebContainerFile[]): boolean {
+  return Boolean(
+    findFirstFile(files, [
+      "server.js",
+      "server.ts",
+      "app.js",
+      "app.ts",
+      "index.js",
+      "index.ts",
+      "src/server.js",
+      "src/server.ts",
+      "src/app.js",
+      "src/app.ts",
+      "src/index.js",
+      "src/index.ts",
+    ]),
+  );
+}
+
+function chooseAutoMode(files: WebContainerFile[]): Exclude<PreviewRunMode, "auto"> {
+  if (hasPythonEntry(files) && !hasFile(files, "package.json")) return "python";
+  if (hasFrontendEntry(files)) return "frontend";
+  if (hasNodeEntry(files) || hasFile(files, "package.json")) return "node";
+  if (hasPythonEntry(files)) return "python";
+  return "frontend";
+}
+
+export function pickRunCommand(
+  files: WebContainerFile[],
+  requestedMode: PreviewRunMode,
+): PickedRunCommand {
+  const mode = requestedMode === "auto" ? chooseAutoMode(files) : requestedMode;
+  const scripts = parsePackageScripts(readTextFile(files, "package.json"));
+
+  if (mode === "frontend") {
+    if (scripts.dev)
+      return { command: "npm", args: ["run", "dev"], mode, label: "npm run dev", install: true };
+    if (scripts.start) {
+      return {
+        command: "npm",
+        args: ["run", "start"],
+        mode,
+        label: "npm run start",
+        install: true,
+      };
+    }
+    return { command: "npx", args: ["vite"], mode, label: "npx vite", install: true };
+  }
+
+  if (mode === "node") {
+    const script = ["dev", "start", "server", "api"].find((name) => scripts[name]);
+    if (script) {
+      return {
+        command: "npm",
+        args: ["run", script],
+        mode,
+        label: `npm run ${script}`,
+        install: true,
+      };
+    }
+
+    const entry = findFirstFile(files, [
+      "server.js",
+      "app.js",
+      "index.js",
+      "src/server.js",
+      "src/app.js",
+      "src/index.js",
+    ]);
+    if (entry)
+      return {
+        command: "node",
+        args: [entry],
+        mode,
+        label: `node ${entry}`,
+        install: hasFile(files, "package.json"),
+      };
+
+    const tsEntry = findFirstFile(files, [
+      "server.ts",
+      "app.ts",
+      "index.ts",
+      "src/server.ts",
+      "src/app.ts",
+      "src/index.ts",
+    ]);
+    if (tsEntry) {
+      return {
+        command: "npx",
+        args: ["tsx", tsEntry],
+        mode,
+        label: `npx tsx ${tsEntry}`,
+        install: true,
+      };
+    }
+  }
+
+  throw new Error("Bu repo üçün run command tapılmadı.");
+}
+
+export function pickPythonEntry(files: WebContainerFile[]): WebContainerFile | null {
+  const candidates = [
+    "main.py",
+    "app.py",
+    "server.py",
+    "src/main.py",
+    "src/app.py",
+    "src/server.py",
+    "index.py",
+  ];
+  const path = findFirstFile(files, candidates);
+  if (path) return files.find((file) => file.path.replace(/^\/+/, "") === path) ?? null;
+  return files.find((file) => file.path.endsWith(".py") && !file.binary) ?? null;
+}
+
+export function looksLikePythonWebServer(content: string): boolean {
+  return /\b(flask|fastapi|uvicorn|django|aiohttp)\b/i.test(content);
+}
+
+/** Backward-compatible helper for older callers. */
+export function pickDevCommand(pkgJsonRaw: string): [string, string[]] {
+  const scripts = parsePackageScripts(pkgJsonRaw);
+  if (scripts.dev) return ["npm", ["run", "dev"]];
+  if (scripts.start) return ["npm", ["run", "start"]];
   return ["npx", ["vite"]];
 }

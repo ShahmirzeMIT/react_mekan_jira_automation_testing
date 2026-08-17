@@ -1,5 +1,8 @@
 // API Configuration
-const API_BASE_URL = "https://nodejsjirataskautomation-production.up.railway.app";
+const API_BASE_URL =
+  import.meta.env["VITE_API_BASE_URL"] ??
+  import.meta.env["VITE_JIRA_API_BASE_URL"] ??
+  "https://nodejsjirataskautomation-production.up.railway.app";
 
 // ============================================
 // CUSTOM API CALL FUNCTION - REUSABLE

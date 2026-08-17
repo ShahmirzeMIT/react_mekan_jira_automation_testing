@@ -22,17 +22,17 @@ export default function AcceptGithubPage() {
 
     const code = params.get("code");
     const state = params.get("state");
-    const userID = sessionStorage.getItem("devflow.github.user-id");
+   
 
-    if (!code || !userID) {
-      setError("GitHub callback is missing the authorization code or user ID.");
+    if (!code ) {
+      setError("GitHub callback is missing the authorization code ");
       return;
     }
 
     void githubService
-      .completeOAuthCallback({ code, state, userId: userID })
+      .completeOAuthCallback({ code, state })
       .then((response: any) => {
-        // Extract githubId from response
+        // Extract githubId from responsex
         const githubId =
           response.githubId || response.data?.githubId || response.user?.id?.toString();
 

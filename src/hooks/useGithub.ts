@@ -90,14 +90,23 @@ export const useGithub = () => {
     }
 
     try {
-      sessionStorage.setItem('devflow.github.user-id', user.uid);
+      const authUrlResponse = await apiCall<{ authUrl: string }>('/github/auth/login', 'POST', {
+        userId: user.uid
+      });
 
-      localStorage.setItem('devflow.github.id', 'github_connected');
-      setIsConnected(true);
-      toast.success('GitHub connected successfully!');
+      if (!authUrlResponse.authUrl) {
+        throw new Error('GitHub authorization URL was not returned.');
+      }
+
+      // Open GitHub OAuth in a new window
+ window.open(authUrlResponse.authUrl);
+
+  
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to connect GitHub.');
     }
+
+
   };
 
   // Fetch repository content (fayl siyahısı / folder structure)

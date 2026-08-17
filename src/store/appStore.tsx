@@ -13,6 +13,7 @@ import { collection, getDocs } from "firebase/firestore";
 import { getFirebaseAuth } from "@/config/firebase";
 import { db } from "@/config/firebase";
 import { authService } from "@/services/authService";
+import { jiraService } from "@/services/jiraService";
 import { mockActivities } from "@/mock/activities";
 import type {
   ActivityEvent,
@@ -50,6 +51,7 @@ interface AIWorkspaceState {
 type Theme = "light" | "dark";
 const THEME_STORAGE_KEY = "devflow.theme";
 const SIDEBAR_STORAGE_KEY = "devflow.sidebar-collapsed";
+const GITHUB_ID_STORAGE_KEY = "devflow.github.id";
 
 type JiraConnection = {
   jiraWorkspace: string | null;
@@ -332,9 +334,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       },
       signOut: async () => {
         try {
+          await jiraService.disconnect().catch((error) => {
+            console.error("Jira disconnect failed:", error);
+          });
           await authService.signOut();
           setUser(null);
           setIdToken(null);
+          localStorage.removeItem(GITHUB_ID_STORAGE_KEY);
+          localStorage.removeItem(SIDEBAR_STORAGE_KEY);
+          localStorage.removeItem(THEME_STORAGE_KEY);
         } catch (error) {
           console.error("Sign out failed:", error);
           throw error;
