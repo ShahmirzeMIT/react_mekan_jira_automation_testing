@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, RefreshCw, SendHorizontal } from "lucide-react";
+import { ExternalLink, Maximize2, RefreshCw, SendHorizontal, X } from "lucide-react";
 import type { PreviewRunMode } from "@/lib/buildFileSystemTree";
 
 interface PreviewFrameProps {
@@ -30,6 +30,26 @@ export function PreviewFrame({
   const [apiResponse, setApiResponse] = useState("Run the Node API, then send a request.");
   const [apiStatus, setApiStatus] = useState<string | null>(null);
   const [apiLoading, setApiLoading] = useState(false);
+
+  // Yeni browser tab-da açanda WebContainer-in cross-origin isolation
+  // handshake-i qırılır və "Connect to Project" ekranı çıxır — çünki
+  // webcontainer-api.io URL-i yalnız SDK-nın qoşulduğu iframe daxilində
+  // işləyir. Ona görə yeni tab əvəzinə eyni iframe-i tam ekran modalda göstəririk.
+  const [fullscreenOpen, setFullscreenOpen] = useState(false);
+
+  useEffect(() => {
+    if (!iframeSrc && fullscreenOpen) setFullscreenOpen(false);
+  }, [iframeSrc, fullscreenOpen]);
+
+  useEffect(() => {
+    if (!fullscreenOpen) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setFullscreenOpen(false);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [fullscreenOpen]);
+
   const apiUrl = useMemo(() => {
     if (!origin) return "";
     const normalizedPath = apiPath.trim().startsWith("/") ? apiPath.trim() : `/${apiPath.trim()}`;
@@ -179,22 +199,19 @@ export function PreviewFrame({
             <RefreshCw className="size-4" />
           </Button>
 
+          {/* Yeni tab əvəzinə tam ekran modalda eyni (qoşulmuş) iframe-i göstərir,
+              çünki webcontainer-api.io linki xam yeni tabda "Connect to Project"
+              ekranı ilə açılır. */}
           <Button
-            asChild
+            type="button"
             size="icon"
             variant="outline"
-            className={!origin ? "pointer-events-none opacity-50" : undefined}
+            onClick={() => setFullscreenOpen(true)}
+            disabled={!origin || !iframeSrc}
+            aria-label="Open preview full screen"
+            title="Open preview full screen"
           >
-            <a
-              href={iframeSrc || undefined}
-              target="_blank"
-              rel="noreferrer"
-              aria-disabled={!origin}
-              aria-label="Open preview in new tab"
-              title="Open preview in new tab"
-            >
-              <ExternalLink className="size-4" />
-            </a>
+            <Maximize2 className="size-4" />
           </Button>
         </div>
       </form>
@@ -214,6 +231,45 @@ export function PreviewFrame({
           </div>
         )}
       </div>
+
+      {fullscreenOpen && iframeSrc && (
+        <div className="fixed inset-0 z-[60] flex flex-col bg-background">
+          <div className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-card px-4">
+            <p className="truncate font-mono text-xs text-muted-foreground">{iframeSrc}</p>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                onClick={onReload}
+                aria-label="Reload preview"
+                title="Reload preview"
+              >
+                <RefreshCw className="size-4" />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                onClick={() => setFullscreenOpen(false)}
+                aria-label="Close full screen preview"
+                title="Close full screen preview"
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 bg-white">
+            <iframe
+              key={`fullscreen-${reloadKey}`}
+              src={iframeSrc}
+              title="repo-preview-fullscreen"
+              className="h-full w-full border-0"
+              allow="cross-origin-isolated"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

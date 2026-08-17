@@ -54,6 +54,12 @@ export function RepoPreviewPanel({ repo, branch, files, fetchFileContent }: Repo
     return () => cancelAnimationFrame(id);
   }, [open]);
 
+  // Panel bağlananda "genişlət" halını sıfırla ki, növbəti açılışda default
+  // (drawer) rejimdən başlasın.
+  useEffect(() => {
+    if (!open) setExpanded(false);
+  }, [open]);
+
   function close() {
     setVisible(false);
     window.setTimeout(() => setOpen(false), 180);
@@ -90,23 +96,29 @@ export function RepoPreviewPanel({ repo, branch, files, fetchFileContent }: Repo
 
       {open && (
         <div
-          className={`fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-sm transition-opacity duration-200 ${
-            visible ? "opacity-100" : "opacity-0"
-          }`}
+          className={`fixed inset-0 z-50 flex overflow-hidden bg-black/50 backdrop-blur-sm transition-opacity duration-200 ${
+            expanded ? "justify-center" : "justify-end"
+          } ${visible ? "opacity-100" : "opacity-0"}`}
         >
-          <button
-            type="button"
-            className="absolute inset-0 cursor-default"
-            aria-label="Close preview"
-            onClick={close}
-          />
+          {!expanded && (
+            <button
+              type="button"
+              className="absolute inset-0 cursor-default"
+              aria-label="Close preview"
+              onClick={close}
+            />
+          )}
 
           <div
-            className={`relative flex h-full w-full flex-col border-l border-border bg-background shadow-2xl transition-transform duration-200 ease-out ${
-              expanded ? "max-w-full" : "max-w-[min(1480px,96vw)]"
+            className={`relative flex h-full w-full flex-col overflow-hidden border-border bg-background shadow-2xl transition-transform duration-200 ease-out ${
+              expanded ? "max-w-full border-0" : "max-w-[min(1480px,96vw)] border-l"
             } ${visible ? "translate-x-0" : "translate-x-6"}`}
           >
-            <div className="flex shrink-0 items-center justify-between gap-4 border-b border-border bg-card px-6 py-3.5">
+            <div
+              className={`flex shrink-0 items-center justify-between gap-4 border-b border-border bg-card px-6 ${
+                expanded ? "py-2" : "py-2.5"
+              }`}
+            >
               <div className="flex min-w-0 items-center gap-3">
                 <span
                   className={`flex size-2 shrink-0 rounded-full ${
@@ -153,6 +165,9 @@ export function RepoPreviewPanel({ repo, branch, files, fetchFileContent }: Repo
               onModeChange={setRunMode}
               onRun={handleRun}
               disabled={preparing}
+              // Həm adi, həm tam ekran rejimində defolt bağlıdır — preview
+              // dərhal maksimum yer alsın. İstəyəndə "Log / .env göstər" ilə açılır.
+              defaultDetailsOpen={false}
             />
 
             {popupBlocked && (
@@ -168,7 +183,7 @@ export function RepoPreviewPanel({ repo, branch, files, fetchFileContent }: Repo
               </div>
             )}
 
-            <div className="min-h-0 flex-1 bg-muted/30 p-4">
+            <div className={`min-h-0 flex-1 overflow-hidden bg-muted/30 ${expanded ? "p-1.5" : "p-3"}`}>
               <div className="h-full overflow-hidden rounded-lg border border-border bg-background shadow-sm">
                 <PreviewFrame
                   origin={previewOrigin}

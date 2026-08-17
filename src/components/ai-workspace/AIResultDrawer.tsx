@@ -1,7 +1,14 @@
 // components/ai-workspace/AIResultDrawer.tsx
 import { useState } from "react";
-import { Drawer, Collapse, Tag, Alert, Empty, Input } from "antd";
-import { FileCode2, FileCheck2, AlertTriangle, UploadCloud, GitCommitHorizontal } from "lucide-react";
+import { Drawer, Collapse, Tag, Alert, Empty, Input, Spin } from "antd";
+import {
+  FileCode2,
+  FileCheck2,
+  AlertTriangle,
+  UploadCloud,
+  GitCommitHorizontal,
+  Loader2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { GeminiTaskResult } from "@/types/gemini";
 import { CodeBlock } from "./CodeBlock";
@@ -46,6 +53,7 @@ export function AIResultDrawer({
 
   const canCommitOrPush = Boolean(userId && owner && repo);
   const effectiveBranch = branch || "main";
+  const isBusy = pushing || committingPath !== null;
 
   function defaultMessage(fallback: string) {
     return commitMessage.trim() || fallback;
@@ -56,6 +64,7 @@ export function AIResultDrawer({
       toast.error("Repository konteksti tapılmadı (owner/repo/userId).");
       return;
     }
+    if (isBusy) return;
 
     setCommittingPath(path);
     try {
@@ -90,6 +99,7 @@ export function AIResultDrawer({
       toast.error("Push ediləcək dəyişən fayl yoxdur.");
       return;
     }
+    if (isBusy) return;
 
     setPushing(true);
     try {
@@ -127,7 +137,9 @@ export function AIResultDrawer({
     <Drawer
       title={result ? result.task : "AI Response"}
       open={open}
-      onClose={onClose}
+      onClose={isBusy ? undefined : onClose}
+      closable={!isBusy}
+      maskClosable={!isBusy}
       width="min(760px, 100vw)"
       destroyOnClose
     >
@@ -181,42 +193,48 @@ export function AIResultDrawer({
 
           {/* Commit/Push paneli */}
           {showRepoActions && (
-            <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Repository-ə göndər
-                </p>
-                {(owner || repo) && (
-                  <span className="font-mono text-[10px] text-muted-foreground">
-                    {owner}/{repo} → {effectiveBranch}
-                  </span>
-                )}
-              </div>
+            <Spin spinning={isBusy} tip={pushing ? "Push edilir…" : "Commit edilir…"}>
+              <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Repository-ə göndər
+                  </p>
+                  {(owner || repo) && (
+                    <span className="font-mono text-[10px] text-muted-foreground">
+                      {owner}/{repo} → {effectiveBranch}
+                    </span>
+                  )}
+                </div>
 
-              <Input
-                placeholder="Commit mesajı (boş buraxsanız avtomatik yaranacaq)"
-                value={commitMessage}
-                onChange={(e) => setCommitMessage(e.target.value)}
-                disabled={!canCommitOrPush}
-              />
+                <Input
+                  placeholder="Commit mesajı (boş buraxsanız avtomatik yaranacaq)"
+                  value={commitMessage}
+                  onChange={(e) => setCommitMessage(e.target.value)}
+                  disabled={!canCommitOrPush || isBusy}
+                />
 
-              <div className="flex items-center justify-between gap-2">
-                {!canCommitOrPush && (
-                  <span className="text-[11px] text-destructive">
-                    Repository seçilməyib — commit/push deaktivdir.
-                  </span>
-                )}
-                <Button
-                  size="sm"
-                  onClick={handlePushAll}
-                  disabled={!canCommitOrPush || pushing || (result.files?.length ?? 0) === 0}
-                  className="ml-auto"
-                >
-                  <UploadCloud className="mr-2 size-4" aria-hidden />
-                  {pushing ? "Push edilir…" : `Bütün faylları push et (${result.files.length})`}
-                </Button>
+                <div className="flex items-center justify-between gap-2">
+                  {!canCommitOrPush && (
+                    <span className="text-[11px] text-destructive">
+                      Repository seçilməyib — commit/push deaktivdir.
+                    </span>
+                  )}
+                  <Button
+                    size="sm"
+                    onClick={handlePushAll}
+                    disabled={!canCommitOrPush || isBusy || (result.files?.length ?? 0) === 0}
+                    className="ml-auto"
+                  >
+                    {pushing ? (
+                      <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
+                    ) : (
+                      <UploadCloud className="mr-2 size-4" aria-hidden />
+                    )}
+                    {pushing ? "Push edilir…" : `Bütün faylları push et (${result.files.length})`}
+                  </Button>
+                </div>
               </div>
-            </div>
+            </Spin>
           )}
 
           {/* needs_more_information halında fayl göstərmirik, izah kifayətdir */}
@@ -234,42 +252,47 @@ export function AIResultDrawer({
                     defaultActiveKey={result.files.length === 1 ? [result.files[0].path] : []}
                     className="bg-transparent"
                   >
-                    {result.files.map((file) => (
-                      <Collapse.Panel
-                        key={file.path}
-                        header={
-                          <span className="font-mono text-xs">{file.path}</span>
-                        }
-                      >
-                        <div className="space-y-2">
-                          <p className="text-xs text-muted-foreground">{file.reason}</p>
-                          {file.changes?.length > 0 && (
-                            <ul className="list-disc pl-4 text-xs space-y-0.5">
-                              {file.changes.map((c, i) => (
-                                <li key={i}>{c}</li>
-                              ))}
-                            </ul>
-                          )}
-                          <CodeBlock path={file.path} code={file.content} />
+                    {result.files.map((file) => {
+                      const isCommittingThis = committingPath === file.path;
+                      return (
+                        <Collapse.Panel
+                          key={file.path}
+                          header={<span className="font-mono text-xs">{file.path}</span>}
+                        >
+                          <Spin spinning={isCommittingThis} tip="Commit edilir…">
+                            <div className="space-y-2">
+                              <p className="text-xs text-muted-foreground">{file.reason}</p>
+                              {file.changes?.length > 0 && (
+                                <ul className="list-disc pl-4 text-xs space-y-0.5">
+                                  {file.changes.map((c, i) => (
+                                    <li key={i}>{c}</li>
+                                  ))}
+                                </ul>
+                              )}
+                              <CodeBlock path={file.path} code={file.content} />
 
-                          {canCommitOrPush && (
-                            <div className="flex justify-end">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleCommitFile(file.path, file.content)}
-                                disabled={committingPath === file.path}
-                              >
-                                <GitCommitHorizontal className="mr-2 size-3.5" aria-hidden />
-                                {committingPath === file.path
-                                  ? "Commit edilir…"
-                                  : "Bu faylı commit et"}
-                              </Button>
+                              {canCommitOrPush && (
+                                <div className="flex justify-end">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleCommitFile(file.path, file.content)}
+                                    disabled={isBusy}
+                                  >
+                                    {isCommittingThis ? (
+                                      <Loader2 className="mr-2 size-3.5 animate-spin" aria-hidden />
+                                    ) : (
+                                      <GitCommitHorizontal className="mr-2 size-3.5" aria-hidden />
+                                    )}
+                                    {isCommittingThis ? "Commit edilir…" : "Bu faylı commit et"}
+                                  </Button>
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      </Collapse.Panel>
-                    ))}
+                          </Spin>
+                        </Collapse.Panel>
+                      );
+                    })}
                   </Collapse>
                 </div>
               )}

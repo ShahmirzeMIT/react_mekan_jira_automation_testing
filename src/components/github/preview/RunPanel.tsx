@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { LoadingOutlined } from "@ant-design/icons";
-import { PlayCircle, Terminal } from "lucide-react";
+import { ChevronDown, ChevronUp, PlayCircle, Terminal } from "lucide-react";
 import type { RunStatus } from "@/hooks/useWebContainerRunner";
 import type { PreviewRunMode } from "@/lib/buildFileSystemTree";
 import type { PreviewEnvConfig } from "@/lib/previewEnv";
@@ -23,6 +23,9 @@ interface RunPanelProps {
   onModeChange: (mode: PreviewRunMode) => void;
   onRun: (envs: PreviewEnvConfig) => void;
   disabled?: boolean;
+  // Detalların (log + .env editorları) defolt açıq/bağlı olması. Preview üçün
+  // maksimum yer qalsın deyə default olaraq false göndərilir.
+  defaultDetailsOpen?: boolean;
 }
 
 const RUN_MODES: Array<{ value: PreviewRunMode; label: string }> = [
@@ -32,14 +35,28 @@ const RUN_MODES: Array<{ value: PreviewRunMode; label: string }> = [
   { value: "python", label: "Python" },
 ];
 
-export function RunPanel({ status, log, mode, onModeChange, onRun, disabled }: RunPanelProps) {
+export function RunPanel({
+  status,
+  log,
+  mode,
+  onModeChange,
+  onRun,
+  disabled,
+  defaultDetailsOpen = false,
+}: RunPanelProps) {
   const logRef = useRef<HTMLDivElement | null>(null);
   const [backendEnv, setBackendEnv] = useState("");
   const [frontendEnv, setFrontendEnv] = useState("");
+  const [detailsOpen, setDetailsOpen] = useState(defaultDetailsOpen);
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
   }, [log]);
+
+  // Xəta olanda logu avtomatik göstər ki, istifadəçi səbəbi görsün.
+  useEffect(() => {
+    if (status === "error") setDetailsOpen(true);
+  }, [status]);
 
   const busy = status === "boot" || status === "install" || status === "build";
   const statusClass =
@@ -50,65 +67,81 @@ export function RunPanel({ status, log, mode, onModeChange, onRun, disabled }: R
         : "border-border bg-muted text-muted-foreground";
 
   return (
-    <div className="shrink-0 border-b border-border bg-card px-5 py-3">
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
-          <div className="flex min-w-[240px] flex-col gap-2">
-            <div className="inline-flex w-fit rounded-md border border-border bg-muted p-1">
-              {RUN_MODES.map((item) => (
-                <button
-                  key={item.value}
-                  type="button"
-                  onClick={() => onModeChange(item.value)}
-                  className={`h-7 rounded px-2.5 text-xs font-medium transition-colors ${
-                    mode === item.value
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                onClick={() =>
-                  onRun({
-                    backendEnv,
-                    frontendEnv,
-                  })
-                }
-                disabled={disabled || busy}
+    <div className="shrink-0 border-b border-border bg-card px-5 py-2.5">
+      <div className="flex flex-col gap-2.5">
+        {/* Həmişə görünən sətir: mode seçimi, Run düyməsi, status, detalları aç/bağla */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex w-fit rounded-md border border-border bg-muted p-1">
+            {RUN_MODES.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => onModeChange(item.value)}
+                className={`h-7 rounded px-2.5 text-xs font-medium transition-colors ${
+                  mode === item.value
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
               >
-                {busy ? <LoadingOutlined spin /> : <PlayCircle className="size-4" />}
-                {status === "idle" || status === "error" ? "Run" : "Run again"}
-              </Button>
-
-              <span
-                className={`inline-flex h-8 items-center rounded-md border px-2.5 font-mono text-[11px] font-medium uppercase ${statusClass}`}
-              >
-                {STATUS_LABEL[status]}
-              </span>
-            </div>
+                {item.label}
+              </button>
+            ))}
           </div>
 
-          <div className="min-w-0 flex-1 overflow-hidden rounded-lg border border-border bg-zinc-950 shadow-inner">
-            <div className="flex h-8 items-center gap-2 border-b border-white/10 px-3 text-[11px] font-medium text-zinc-400">
-              <Terminal className="size-3.5" aria-hidden />
-              <span>Runner Log</span>
-            </div>
-            <div
-              ref={logRef}
-              className="max-h-32 min-h-20 overflow-y-auto p-3 font-mono text-xs leading-5 whitespace-pre-wrap text-emerald-300"
-            >
-              {log || "Logs will appear here..."}
-            </div>
-          </div>
+          <Button
+            size="sm"
+            onClick={() =>
+              onRun({
+                backendEnv,
+                frontendEnv,
+              })
+            }
+            disabled={disabled || busy}
+          >
+            {busy ? <LoadingOutlined spin /> : <PlayCircle className="size-4" />}
+            {status === "idle" || status === "error" ? "Run" : "Run again"}
+          </Button>
+
+          <span
+            className={`inline-flex h-8 items-center rounded-md border px-2.5 font-mono text-[11px] font-medium uppercase ${statusClass}`}
+          >
+            {STATUS_LABEL[status]}
+          </span>
+
+          <Button
+            size="sm"
+            variant="ghost"
+            className="ml-auto"
+            onClick={() => setDetailsOpen((current) => !current)}
+          >
+            {detailsOpen ? (
+              <ChevronUp className="mr-1.5 size-3.5" aria-hidden />
+            ) : (
+              <ChevronDown className="mr-1.5 size-3.5" aria-hidden />
+            )}
+            {detailsOpen ? "Detalları gizlət" : "Log / .env göstər"}
+          </Button>
         </div>
 
-        {mode === "frontend" && (
+        {/* Log + .env editorları — default bağlıdır, preview-ə maksimum yer qalsın */}
+        {detailsOpen && (
+          <div className="flex flex-col gap-2.5 xl:flex-row xl:items-start">
+            <div className="min-w-0 flex-1 overflow-hidden rounded-lg border border-border bg-zinc-950 shadow-inner">
+              <div className="flex h-8 items-center gap-2 border-b border-white/10 px-3 text-[11px] font-medium text-zinc-400">
+                <Terminal className="size-3.5" aria-hidden />
+                <span>Runner Log</span>
+              </div>
+              <div
+                ref={logRef}
+                className="max-h-28 min-h-16 overflow-y-auto p-3 font-mono text-xs leading-5 whitespace-pre-wrap text-emerald-300"
+              >
+                {log || "Logs will appear here..."}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {detailsOpen && mode === "frontend" && (
           <div className="rounded-lg border border-border bg-background/60 p-3">
             <div className="mb-2">
               <p className="text-sm font-semibold">Frontend .env</p>
@@ -121,12 +154,12 @@ export function RunPanel({ status, log, mode, onModeChange, onRun, disabled }: R
               value={frontendEnv}
               onChange={(event) => setFrontendEnv(event.target.value)}
               placeholder={"VITE_API_URL=https://frontend-api.example.com"}
-              className="min-h-32 font-mono text-xs"
+              className="min-h-24 font-mono text-xs"
             />
           </div>
         )}
 
-        {(mode === "node" || mode === "python") && (
+        {detailsOpen && (mode === "node" || mode === "python") && (
           <div className="rounded-lg border border-border bg-background/60 p-3">
             <div className="mb-2">
               <p className="text-sm font-semibold">Backend .env</p>
@@ -139,12 +172,12 @@ export function RunPanel({ status, log, mode, onModeChange, onRun, disabled }: R
               value={backendEnv}
               onChange={(event) => setBackendEnv(event.target.value)}
               placeholder={"API_URL=https://api.example.com\nFIREBASE_PROJECT_ID=demo"}
-              className="min-h-32 font-mono text-xs"
+              className="min-h-24 font-mono text-xs"
             />
           </div>
         )}
 
-        {mode === "auto" && (
+        {detailsOpen && mode === "auto" && (
           <div className="rounded-lg border border-dashed border-border bg-background/40 p-3 text-sm text-muted-foreground">
             Select React, Node API, or Python to show the matching `.env` editor.
           </div>
