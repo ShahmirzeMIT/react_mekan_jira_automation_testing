@@ -2,9 +2,6 @@ import { useState } from "react";
 import { GoogleGenAI } from "@google/genai";
 import { apiCall } from "@/api/apiCall";
 
-const ai = new GoogleGenAI({
-  apiKey: import.meta.env["VITE_GEMINI_API_KEY"],
-});
 
 // yalnız bu sətri dəyiş, faylın qalanı olduğu kimi qalsın:
 export interface FileData {
