@@ -37,7 +37,7 @@ export default function TaskDetailsPage() {
   const { data: task, isLoading, refetch } = useTask(taskId);
   const { logActivity, setTask } = useAppStore();
   const [comment, setComment] = useState("");
-x
+
   if (!taskId)
     return (
       <EmptyState title="Task not found" description="Select a task from the task list." />

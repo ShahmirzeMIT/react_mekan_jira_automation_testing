@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, Sparkles, Loader2 } from "lucide-react";
+import { Send, Sparkles, Loader2, RefreshCcw } from "lucide-react";
 import { collection, getDocs } from "firebase/firestore";
 import { toast } from "sonner";
 
@@ -11,16 +11,37 @@ import GithubFiles, {
 import { RepoFileEntry } from "@/components/github/RepoFileTree";
 import { AIResultDrawer } from "@/components/ai-workspace/AIResultDrawer";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { useGemini } from "@/hooks/useGemini";
 import { useAuth } from "@/hooks/useAuth";
 import { useAppStore } from "@/store/appStore";
 import { db } from "@/config/firebase";
 import { jiraService } from "@/services/jiraService";
+// NOTE: adjust this import to wherever `apiCall` actually lives in your project
+// (e.g. "@/lib/api" or "@/services/apiCall"). It is used below to hit
+// POST /canvas/jira/issue/status
+
 import { guessLanguageFromPath } from "@/lib/fileLanguage";
 import { mapIssueToTask } from "@/utils";
 import { parseGeminiResponse } from "@/lib/parseGeminiResponse";
 import type { Task, TaskPriority, TaskStatus } from "@/types";
 import type { GeminiTaskResult } from "@/types/gemini";
+import { apiCall } from "@/api/apiCall";
 
 const STATUS_STYLES: Record<string, { rail: string; dot: string; pill: string }> = {
   green: {
@@ -98,6 +119,19 @@ function renderPriority(priority: TaskPriority): string {
 
 function isDoneTask(task: Task): boolean {
   return task.status === "DONE";
+}
+
+// Best-effort mapping from a free-form Jira status/transition name back to our
+// internal TaskStatus enum, so the local queue list can reflect the change
+// immediately without waiting for a full refetch. Extend this map if your
+// Jira project uses different status names.
+function mapJiraStatusNameToTaskStatus(statusName: string): TaskStatus {
+  const normalized = statusName.trim().toLowerCase();
+  if (["done", "closed", "resolved"].includes(normalized)) return "DONE";
+  if (["in progress", "in-progress", "doing"].includes(normalized)) return "IN_PROGRESS";
+  if (["in review", "review", "code review"].includes(normalized)) return "IN_REVIEW";
+  if (["blocked", "blocker"].includes(normalized)) return "BLOCKED";
+  return "TODO" as TaskStatus;
 }
 
 interface JiraUserRecord {
@@ -183,6 +217,116 @@ function AILoadingOverlay({ active, label, subLabel }: AILoadingOverlayProps) {
   );
 }
 
+// Shape returned by Jira's "get transitions" endpoint. Adjust the field
+// names below if your jiraService wraps the response differently.
+interface JiraTransitionOption {
+  id: string;
+  name: string;
+}
+
+// Default set of statuses shown in the "Change status" modal. These are used
+// as-is (rather than fetched live from Jira's transitions endpoint), so the
+// `id` values below are sent as `transitionId` to POST /canvas/jira/issue/status.
+// If your Jira workflow uses different transition IDs, update them here.
+const DEFAULT_STATUS_TRANSITIONS: JiraTransitionOption[] = [
+  { id: "11", name: "To Do" },
+  { id: "21", name: "In Progress" },
+  { id: "31", name: "In Review" },
+  { id: "41", name: "Done" },
+];
+
+// ---------------------------------------------------------------------------
+// Change-status modal: lets the user pick one of the available Jira
+// transitions for the currently loaded issue and submit it.
+// ---------------------------------------------------------------------------
+interface ChangeStatusModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  issueKey: string | undefined;
+  transitions: JiraTransitionOption[];
+  transitionsLoading: boolean;
+  transitionsError: string | null;
+  submitting: boolean;
+  onSubmit: (transition: JiraTransitionOption) => void;
+}
+
+function ChangeStatusModal({
+  open,
+  onOpenChange,
+  issueKey,
+  transitions,
+  transitionsLoading,
+  transitionsError,
+  submitting,
+  onSubmit,
+}: ChangeStatusModalProps) {
+  const [selectedTransitionId, setSelectedTransitionId] = useState<string>("");
+
+  useEffect(() => {
+    if (open) {
+      setSelectedTransitionId("");
+    }
+  }, [open]);
+
+  const selectedTransition = transitions.find((t) => t.id === selectedTransitionId);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Change status</DialogTitle>
+          <DialogDescription>
+            {issueKey ? `Update the status of ${issueKey}.` : "Update the status of this issue."}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-2 py-2">
+          <Label htmlFor="status-select">New status</Label>
+
+          {transitionsLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" aria-hidden />
+              Loading available statuses…
+            </div>
+          ) : transitionsError ? (
+            <p className="text-sm text-destructive">{transitionsError}</p>
+          ) : transitions.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No status transitions available.</p>
+          ) : (
+            <Select value={selectedTransitionId} onValueChange={setSelectedTransitionId}>
+              <SelectTrigger id="status-select">
+                <SelectValue placeholder="Select a status" />
+              </SelectTrigger>
+              <SelectContent>
+                {transitions.map((transition) => (
+                  <SelectItem key={transition.id} value={transition.id}>
+                    {transition.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => selectedTransition && onSubmit(selectedTransition)}
+            disabled={!selectedTransition || submitting || transitionsLoading}
+          >
+            {submitting ? (
+              <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
+            ) : null}
+            {submitting ? "Updating…" : "Submit"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function AIWorkspacePage() {
   const { integrations, ai, setTask } = useAppStore();
   const { user } = useAuth();
@@ -220,6 +364,21 @@ export default function AIWorkspacePage() {
     "idle" | "selecting" | "fetching" | "generating"
   >("idle");
 
+  // Jira auth details, resolved once in the queue-loading effect and reused
+  // by the "Change status" flow so we don't have to hit Firestore again.
+  const [jiraAuth, setJiraAuth] = useState<{
+    accessToken: string;
+    cloudId: string;
+    accountId: string;
+  } | null>(null);
+
+  // ---- Change status modal state ----
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [statusTransitions, setStatusTransitions] = useState<JiraTransitionOption[]>([]);
+  const [statusTransitionsLoading, setStatusTransitionsLoading] = useState(false);
+  const [statusTransitionsError, setStatusTransitionsError] = useState<string | null>(null);
+  const [statusSubmitting, setStatusSubmitting] = useState(false);
+
   useEffect(() => {
     setSelectedKey(ai.selectedTaskKey);
   }, [ai.selectedTaskKey]);
@@ -233,6 +392,7 @@ export default function AIWorkspacePage() {
         setQueue([]);
         setQueueError(null);
         setQueueLoading(false);
+        setJiraAuth(null);
         return;
       }
 
@@ -268,7 +428,12 @@ export default function AIWorkspacePage() {
           if (!active) return;
           setQueue([]);
           setQueueError("Jira connection data is incomplete.");
+          setJiraAuth(null);
           return;
+        }
+
+        if (active) {
+          setJiraAuth({ accessToken, cloudId, accountId });
         }
 
         const response = await jiraService.getCanvasIssues({
@@ -461,6 +626,60 @@ export default function AIWorkspacePage() {
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Change status flow
+  //
+  // NOTE: this now uses a fixed, default set of statuses (To Do, In
+  // Progress, In Review, Done) instead of fetching live transitions from
+  // Jira's "GET transitions" endpoint. If you later want to fetch the
+  // real, issue-specific transitions again, replace the body of
+  // `handleOpenStatusModal` with a call to your Jira transitions endpoint
+  // and keep the loading/error states wired the same way.
+  // ---------------------------------------------------------------------
+  function handleOpenStatusModal() {
+    if (!selected) return;
+    if (!jiraAuth) {
+      toast.error("Jira connection is not ready yet. Please try again in a moment.");
+      return;
+    }
+
+    setStatusModalOpen(true);
+    setStatusTransitionsError(null);
+    setStatusTransitionsLoading(false);
+    setStatusTransitions(DEFAULT_STATUS_TRANSITIONS);
+  }
+
+async function handleSubmitStatusChange(
+  transition: JiraTransitionOption
+) {
+  if (!selected || !jiraAuth) return;
+
+  setStatusSubmitting(true);
+
+  try {
+    await apiCall("/canvas/jira/issue/status", "POST", {
+      cloudId: jiraAuth.cloudId,
+      accountId: jiraAuth.accountId,
+      issueKey: selected.key,
+      transitionId: transition.id,
+      statusName: transition.name,
+    });
+
+    toast.success(
+      `Status updated to "${transition.name}" for ${selected.key}`
+    );
+
+    // Refresh page after successful status update
+    window.location.reload();
+
+  } catch (err) {
+    console.error("Unable to update issue status:", err);
+    toast.error("Could not update the status. Please try again.");
+  } finally {
+    setStatusSubmitting(false);
+  }
+}
+
   const { owner: activeOwner, repo: activeRepoName } = useMemo(
     () => splitOwnerRepo(activeRepo),
     [activeRepo],
@@ -582,12 +801,20 @@ export default function AIWorkspacePage() {
                 Loaded issue
               </p>
               <p className="truncate text-sm font-medium">
-                {selected ? `${selected.key} — ${selected.title.split(' ').slice(0, 10).join(' ')}..` : "Nothing selected yet"}
+                {selected ? `${selected.key} — ${selected.title.split(' ').slice(0, 5).join(' ')}..` : "Nothing selected yet"}
               </p>
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
               <SelectedFilesMenu files={selectedGithubFiles} onRemove={handleRemoveGithubFile} />
+              <Button
+                onClick={handleOpenStatusModal}
+                disabled={!selected || statusTransitionsLoading}
+                variant="outline"
+              >
+                <RefreshCcw className="mr-2 size-4" aria-hidden />
+                Change Status
+              </Button>
               <Button
                 onClick={handleAutoDispatch}
                 disabled={!selected || isAutoBusy || isManualBusy}
@@ -657,6 +884,17 @@ export default function AIWorkspacePage() {
         owner={activeOwner}
         repo={activeRepoName}
         branch={activeBranch}
+      />
+
+      <ChangeStatusModal
+        open={statusModalOpen}
+        onOpenChange={setStatusModalOpen}
+        issueKey={selected?.key}
+        transitions={statusTransitions}
+        transitionsLoading={statusTransitionsLoading}
+        transitionsError={statusTransitionsError}
+        submitting={statusSubmitting}
+        onSubmit={handleSubmitStatusChange}
       />
     </div>
   );
