@@ -25,7 +25,7 @@ export const githubService = {
     return response.authUrl;
   },
 
-  async completeOAuthCallback(input: { code: string; state?: string | null; userId: string }): Promise<GithubCallbackResponse> {
+  async completeOAuthCallback(input: { code: string; state?: string | null; }): Promise<GithubCallbackResponse> {
     const response = await apiRequest<GithubCallbackResponse>("/github/auth/callback", {
       method: "POST",
       body: JSON.stringify(input),
