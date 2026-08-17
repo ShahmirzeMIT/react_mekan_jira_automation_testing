@@ -34,10 +34,12 @@ export interface GithubFilesHandle {
 interface GithubFilesProps {
   onSelectedFilesChange?: (files: SelectedGithubFile[]) => void;
   onRepoFilesChange?: (files: RepoFileEntry[]) => void;
+  // Seçilmiş repo/branch dəyişdikcə parent-ə ötürür (commit/push üçün lazımdır)
+  onRepoBranchChange?: (repo: string | undefined, branch: string | undefined) => void;
 }
 
 function GithubFilesInner(
-  { onSelectedFilesChange, onRepoFilesChange }: GithubFilesProps,
+  { onSelectedFilesChange, onRepoFilesChange, onRepoBranchChange }: GithubFilesProps,
   ref: React.Ref<GithubFilesHandle>,
 ) {
   const { integrations } = useAppStore();
@@ -115,6 +117,12 @@ function GithubFilesInner(
     onRepoFilesChange?.(repoFiles);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repoFiles]);
+
+  // Seçilmiş repo/branch dəyişdikcə parent-ə ötürür (commit/push üçün owner/repo/branch lazımdır)
+  useEffect(() => {
+    onRepoBranchChange?.(selectedRepo || undefined, selectedBranch || undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRepo, selectedBranch]);
 
   useImperativeHandle(ref, () => ({
     removeSelectedFile: (path: string) => {

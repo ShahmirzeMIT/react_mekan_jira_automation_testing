@@ -127,10 +127,25 @@ function getUserEmail(record: JiraUserRecord): string | null {
   return typeof email === "string" ? email.trim().toLowerCase() : null;
 }
 
+// selectedRepo dəyəri "owner/repo" formatındadırsa ayırır.
+// Format fərqlidirsə (məs. yalnız repo adı), bu funksiyanı öz backend-inizə uyğun dəyişin.
+function splitOwnerRepo(selectedRepo: string | undefined): {
+  owner: string | null;
+  repo: string | null;
+} {
+  if (!selectedRepo) return { owner: null, repo: null };
+  const parts = selectedRepo.split("/");
+  if (parts.length === 2) {
+    return { owner: parts[0], repo: parts[1] };
+  }
+  return { owner: null, repo: selectedRepo };
+}
+
 export default function AIWorkspacePage() {
   const { integrations, ai, setTask } = useAppStore();
   const { user } = useAuth();
   const { askGemini, askGeminiSelectFiles } = useGemini();
+  const githubId = localStorage.getItem("devflow.github.id");
 
   const [selectedKey, setSelectedKey] = useState<string | null>(ai.selectedTaskKey);
   const [notes, setNotes] = useState("");
@@ -140,6 +155,12 @@ export default function AIWorkspacePage() {
   const [queueError, setQueueError] = useState<string | null>(null);
   const [selectedGithubFiles, setSelectedGithubFiles] = useState<SelectedGithubFile[]>([]);
   const [repoFiles, setRepoFiles] = useState<RepoFileEntry[]>([]);
+
+  // Auto/manual axınları üçün ortaq: hazırda seçilmiş repo/branch (commit/push-un
+  // owner/repo/branch parametrləri üçün lazımdır).
+  const [activeRepo, setActiveRepo] = useState<string | undefined>();
+  const [activeBranch, setActiveBranch] = useState<string | undefined>();
+
   const githubFilesRef = useRef<GithubFilesHandle>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [aiResult, setAiResult] = useState<GeminiTaskResult | null>(null);
@@ -388,6 +409,11 @@ export default function AIWorkspacePage() {
     }
   }
 
+  const { owner: activeOwner, repo: activeRepoName } = useMemo(
+    () => splitOwnerRepo(activeRepo),
+    [activeRepo],
+  );
+
   return (
     <div className="h-screen overflow-hidden bg-background p-4">
       <div className="mx-auto flex h-full max-w-7xl gap-4">
@@ -514,6 +540,10 @@ export default function AIWorkspacePage() {
               ref={githubFilesRef}
               onSelectedFilesChange={setSelectedGithubFiles}
               onRepoFilesChange={setRepoFiles}
+              onRepoBranchChange={(repo, branch) => {
+                setActiveRepo(repo);
+                setActiveBranch(branch);
+              }}
             />
           </div>
         </section>
@@ -524,6 +554,10 @@ export default function AIWorkspacePage() {
         onClose={() => setDrawerOpen(false)}
         result={aiResult}
         rawFallback={aiRawFallback}
+        userId={githubId}
+        owner={activeOwner}
+        repo={activeRepoName}
+        branch={activeBranch}
       />
 
       <AIResultDrawer
@@ -531,6 +565,10 @@ export default function AIWorkspacePage() {
         onClose={() => setAutoDrawerOpen(false)}
         result={autoAiResult}
         rawFallback={autoAiRawFallback}
+        userId={githubId}
+        owner={activeOwner}
+        repo={activeRepoName}
+        branch={activeBranch}
       />
     </div>
   );
